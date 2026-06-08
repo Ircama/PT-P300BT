@@ -72,11 +72,24 @@ def configure_printer(ser, raster_lines, tape_dim, compress=True, chaining=False
 def do_print_job(ser, args, data):
     print('=> Querying printer status...')
 
-    reset_printer(ser)
-
-    # Dump status
-    ser.write(ptcbp.serialize_control('get_status'))
-    status = ptstatus.unpack_status(ser.read(32))
+    # The Bluetooth serial link (esp. on macOS) can be idle/half-open on first
+    # access, so a single status read may hang or return nothing. Re-init and
+    # re-read until we get a full 32-byte status reply or run out of attempts.
+    status = None
+    for attempt in range(1, 7):
+        reset_printer(ser)
+        ser.reset_input_buffer()
+        ser.write(ptcbp.serialize_control('get_status'))
+        resp = ser.read(32)
+        if len(resp) == 32:
+            status = ptstatus.unpack_status(resp)
+            break
+        print(f"   ...no status yet (attempt {attempt}/6, got "
+              f"{len(resp)} bytes); retrying...")
+    if status is None:
+        print('** Printer did not respond to status query. Make sure it is '
+              'connected and active in Bluetooth, then try again.')
+        sys.exit(1)
     ptstatus.print_status(status)
 
     if status.err != 0x0000 or status.phase_type != 0x00 or status.phase != 0x0000:
@@ -113,9 +126,11 @@ def do_print_job(ser, args, data):
         # Print and feed
         ser.write(ptcbp.serialize_control('print'))
 
-        # Dump status that the printer returns
-        status = ptstatus.unpack_status(ser.read(32))
-        ptstatus.print_status(status)
+        # Dump status that the printer returns (best-effort; the print has
+        # already been sent, so don't crash if the reply is slow/short).
+        resp = ser.read(32)
+        if len(resp) == 32:
+            ptstatus.print_status(ptstatus.unpack_status(resp))
 
     print("=> All done.")
 
