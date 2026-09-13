@@ -668,12 +668,21 @@ def _draw_text_mixed(draw, xy, text, font, fill=None, anchor=None,
                       stroke_width=stroke_width,
                       stroke_fill=stroke_fill)
         return
-    # Baseline from the FONT's ascent (constant), exactly like PIL's
-    # draw.text anchors: characters sit on a fixed baseline, so adding a
-    # tall letter (e.g. the 'l' in "acca" -> "accal") NEVER shifts the
-    # existing glyphs — with --uniform-font every text variant then lands
-    # in the same vertical place instead of floating up/down.
-    baseline = y0 + font.font.getmetrics()[0]
+    # Baseline selection:
+    # - default: from the CLEAN TEXT bounding box (anchor "ls"), i.e.
+    #   y0 is the top of the text ink exactly like PIL's draw.text with
+    #   anchor "lt" — the original behaviour. Adding a tall letter raises
+    #   only the boxes that need it; the text keeps its natural vertical
+    #   place (top at y0), never drifting down.
+    # - --uniform-font: from the standard sample "Ag" (the same measure
+    #   the auto-fit used), so every text variant shares a FIXED baseline
+    #   and the existing glyphs never shift when a tall letter is added.
+    if font._uniform:
+        asc = -font.font.getbbox("Ag", anchor="ls")[1]
+    else:
+        asc = -font.font.getbbox(clean, anchor="ls")[1] \
+            if clean.strip() else font.font.getmetrics()[0]
+    baseline = y0 + asc
     for font_used, chunk in font._split(text):
         if font_used is None:
             # Emoji slot(s): paste the raster at the slot position, top
