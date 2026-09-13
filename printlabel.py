@@ -110,6 +110,39 @@ def emoji_thumbnail(ch, height, mono=True):
     return raster
 
 
+def _luminance_mono(raster):
+    """In-place: convert an RGBA COLR emoji raster to black-ink shapes.
+
+    Applies a luminance cut to the embedded-color render: dark pixels
+    (outline, eyes, mouth) become solid black, light pixels (the yellow
+    face fill) become transparent so the label's white shows through — a
+    face with an outline reads as a ring instead of a filled black blob.
+    Used when --mono-emoji is OFF so the label preview still shows the
+    COLR-derived shape in black and white (matching what actually prints)
+    instead of the full-color bitmap.
+    """
+    if raster is None or raster.mode != "RGBA":
+        return
+    pix = raster.load()
+    w, h = raster.size
+    # Sharp luminance cut: dark ink (outline/features) stays black;
+    # light fills (yellow face, whites) go transparent.
+    LO, HI = 140.0, 175.0
+    for y in range(h):
+        for x in range(w):
+            r, g, b, a = pix[x, y]
+            if not a:
+                continue
+            lum = 0.299 * r + 0.587 * g + 0.114 * b
+            if lum <= LO:
+                pix[x, y] = (0, 0, 0, a)          # solid ink
+            elif lum >= HI:
+                pix[x, y] = (0, 0, 0, 0)          # clear (white label)
+            else:
+                keep = int(round(a * (HI - lum) / (HI - LO)))
+                pix[x, y] = (0, 0, 0, keep)     # antialias ramp
+
+
 def _emoji_raster_to_height(emoji_path, char, target_h, mono=False):
     """Render an emoji as an RGBA raster scaled to `target_h` px high.
 
@@ -262,15 +295,21 @@ class _MixedFont:
     def _raster(self, ch):
         """Cached RGBA raster + width for an emoji at the target height.
 
-        The cache key includes the mono flag (a mono view uses the font's
-        base outline glyph, the color view the embedded color bitmap, so
-        they cannot share the same raster)."""
+        The cache key includes the mono flag: mono=True renders the font's
+        base B/W outline glyph; mono=False renders the embedded color
+        bitmap and then applies a luminance cut, so the label preview /
+        printed raster shows the COLR-derived shape in black and white
+        (matching the 1-bit thermal output) instead of full color."""
         key = (ch, self._emoji_target_h, self._mono)
         if key in self._emoji_raster_cache:
             return self._emoji_raster_cache[key]
         raster, w = _emoji_raster_to_height(self._emoji_path, ch,
                                             self._emoji_target_h or 32,
                                             mono=self._mono)
+        if raster is not None and not self._mono:
+            # mono-emoji unchecked: derive black & white from the COLR
+            # render via a luminance cut (outline stays, fill clears).
+            _luminance_mono(raster)
         self._emoji_raster_cache[key] = (raster, w)
         return raster, w
 
