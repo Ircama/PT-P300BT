@@ -60,41 +60,78 @@ browser and color emoji rendering in the text box.
 
 ## Usage
 
-Standard usage: `python3 printlabel.py COM_PORT FONT_NAME TEXT_TO_PRINT`
+The program has two front-ends: a **command line** for scripted / batch
+printing, and a **Tkinter GUI** (`--gui`) for interactive use with a live
+1:1 preview, a system font browser and color emoji in the text box.
 
-### Basic Text Label
+### CLI
 
-```
-python3 printlabel.py -sl COM7 "arial.ttf" "Lorem Ipsum"
-```
-
-or:
+Standard usage:
 
 ```
-printlabel.exe COM7 "arial.ttf" "Lorem Ipsum"
+python3 printlabel.py COM_PORT FONT_NAME TEXT_TO_PRINT
 ```
 
-### Multiline Text Label
+- `COM_PORT`: printer port — `COM7` (Windows), `/dev/rfcomm0` (Linux) or `bt:NAME` for native Bluetooth (e.g. `bt:PT-P300`).
+- `FONT_NAME`: TrueType/OpenType font file (optional, default `arial.ttf`).
+- `TEXT_TO_PRINT`: text of the label (multiple arguments are joined with spaces; use the literal `\n` for line breaks).
 
-Text can be multiline when the text includes "\n" characters. (Use the two characters `\n` in your text to create line breaks). The `--line-spacing` option controls the spacing between lines (default: 1.2, meaning 20% extra space between lines). The font size is automatically calculated to fit all lines within the printable area. The `--center-text` option allows horizontally centering each single line.
-
-```bash
-python printlabel.py -sl COM3 arial.ttf "Line 1\nLine 2\nLine 3"
-```
-
-### Graphical Interface
-
-A Tkinter GUI is available with all the options exposed as controls, a live
-preview of the label (matching the printed tape 1:1), color emoji in the text
-box, a system font browser with per-font samples, and print confirmation:
+Launch the GUI instead:
 
 ```bash
 python printlabel.py --gui
 ```
 
-While the GUI is running, console progress messages are suppressed (the GUI
-has its own status/log panel). Tkinter is part of the Python standard library;
-on Debian/Ubuntu install the OS package `python3-tk` if missing.
+The GUI exposes all options as controls and suppresses console progress
+messages while running. Tkinter is part of the Python standard library; on
+Debian/Ubuntu install the OS package `python3-tk` if missing.
+
+### Basic Text Label
+
+```bash
+python3 printlabel.py -sl COM7 "arial.ttf" "Lorem Ipsum"
+```
+
+or, using the packaged executable:
+
+```
+printlabel.exe COM7 "arial.ttf" "Lorem Ipsum"
+```
+
+(`-s` shows the generated image, `-l` adds rulers and print-area guides.)
+
+### Multiline Text Label
+
+Text is multiline when it contains the literal `\n` characters. The
+`--line-spacing` option controls the spacing between lines (default 1.2,
+i.e. 20% extra space); the font size is automatically calculated to fit
+all lines within the printable area. `--center-text` horizontally centers
+each single line:
+
+```bash
+python printlabel.py -sl COM3 arial.ttf "Line 1\nLine 2\nLine 3"
+```
+
+### Emoji
+
+Emoji are rendered as raster overlays, in black & white by default (what
+the 1-bit thermal printer actually prints); use `--no-mono-emoji` for the
+embedded colors on screen:
+
+```bash
+python printlabel.py -sl COM7 "arial.ttf" "Hello 😀"
+python printlabel.py -sl --no-mono-emoji COM7 "arial.ttf" "Hello 😀"
+```
+
+### OpenType features (ligatures)
+
+With `uharfbuzz` installed, apply a GSUB feature of the selected font
+(e.g. the arrows of Fira Code), without altering normal characters:
+
+```bash
+python printlabel.py --list-ligatures "Fira Code"       # see the available tags
+python printlabel.py -sl --ligatures calt COM7 "Fira Code Regular Nerd Font.ttf" "ciao-->qui"
+```
 
 ## Command Line Arguments
 
