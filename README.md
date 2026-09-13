@@ -8,7 +8,10 @@ It supports any TrueType and OpenType font, automatically selects the maximum fo
 
 The [Brother P-touch Cube PT-P300BT labelling machine](https://support.brother.com/g/b/producttop.aspx?c=gb&lang=en&prod=p300bteuk) is intended to be controlled from the official Brother P-touch Design&Print 2 app for [Android](https://play.google.com/store/apps/details?id=com.brother.ptouch.designandprint2) and [iOS](https://apps.apple.com/it/app/brother-p-touch-design-print/id1105307806) devices.
 
-This repository provides a command-line tool in pure Python to print from a computer.
+This repository provides a pure-Python tool to print from a computer: a
+command-line interface for scripted / batch printing and a full Tkinter
+graphical interface (`--gui`) with a live 1:1 preview, a system font
+browser and color emoji rendering in the text box.
 
 ## Features
 
