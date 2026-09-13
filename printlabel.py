@@ -904,8 +904,15 @@ def main():
         assert data is not None
         do_print_job(ser, args, data)
     finally:
-        # Initialize
-        reset_printer(ser)
+        # Initialize (released state) and close the connection so the port
+        # / RFCOMM channel is freed immediately.
+        try:
+            reset_printer(ser)
+        finally:
+            try:
+                ser.close()
+            except Exception:
+                pass
 
 
 # --------------------------------------------------------------------------
@@ -971,7 +978,7 @@ def open_printer(comport):
         from btcommon import BTSerial
         name = comport[3:] or "PT-P300"
         return BTSerial(name=name, timeout=3)
-    return serial.Serial(comport, timeout=3)
+    return serial.Serial(comport, timeout=10, write_timeout=10)
 
 
 class _LabelError(Exception):
@@ -1485,7 +1492,6 @@ def gui_entry():
     """Launch the Tkinter GUI."""
     from ptgui import LabelGUI
     LabelGUI().mainloop()
-
 
 if __name__ == "__main__":
     if "--gui" in sys.argv:

@@ -2,9 +2,24 @@
 
 name: Python syntax checker
 
-on: [push]
+on: [push, pull_request]
 
 jobs:
+  test-print-status:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.9', '3.14']
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: Install runtime dependencies
+      run: python -m pip install -r requirements.txt
+    - name: Test print status handling
+      run: python -m unittest -v test_print_status
+
   build:
 
     runs-on: ubuntu-latest
