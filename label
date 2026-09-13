@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+#
+# label — convenience wrapper for printing to a Brother PT-P300BT over the
+# native macOS Bluetooth bridge (see native/README.md).
+#
+# Usage:
+#   label "Hello"                      # one line
+#   label "Top\nBottom"                # two lines (font auto-shrinks to fit)
+#   label -M art.pdf "With an icon"    # merge a PNG/PDF/QR before the text
+#   label -H --stroke-width 2 "Bold"   # any printlabel.py flag passes through
+#   label -n -S /tmp/p.png "Preview"   # save a PNG preview, don't print
+#
+# Environment overrides:
+#   LABEL_PORT  printer target          (default: bt:PT-P300)
+#   LABEL_FONT  font file path          (default: Arial, macOS)
+#
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+PORT="${LABEL_PORT:-bt:PT-P300}"
+FONT="${LABEL_FONT:-/System/Library/Fonts/Supplemental/Arial.ttf}"
+
+if [ "$#" -eq 0 ]; then
+    cat >&2 <<'USAGE'
+usage: label [printlabel.py options] "TEXT"   (use \n for line breaks)
+
+examples:
+  label "Hello"
+  label "Top\nBottom"
+  label -M icon.pdf "With icon"
+  label -n -S /tmp/preview.png "Preview only"
+
+overrides: LABEL_PORT (default bt:PT-P300), LABEL_FONT (default Arial)
+USAGE
+    exit 1
+fi
+
+# Prefer the project's virtualenv if present.
+PY="$SCRIPT_DIR/.venv/bin/python3"
+[ -x "$PY" ] || PY="python3"
+
+# printlabel.py positionals are: COM_PORT FONT_NAME TEXT...; any -flags passed
+# by the user are parsed wherever they appear, so "$@" can mix flags and text.
+exec "$PY" "$SCRIPT_DIR/printlabel.py" "$PORT" "$FONT" "$@"

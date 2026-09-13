@@ -101,14 +101,24 @@ def wait_for_print_completion(ser, timeout=60):
 def do_print_job(ser, args, data):
     print('=> Querying printer status...')
 
-    reset_printer(ser)
-
-    # Dump status
-    ser.write(ptcbp.serialize_control('get_status'))
-    response = ser.read(32)
-    if len(response) != 32:
-        raise TimeoutError('Printer did not return a complete status reply.')
-    status = ptstatus.unpack_status(response)
+    # The Bluetooth serial link (esp. on macOS) can be idle/half-open on first
+    # access, so a single status read may hang or return nothing. Re-init and
+    # re-read until we get a full 32-byte status reply or run out of attempts.
+    status = None
+    for attempt in range(1, 7):
+        reset_printer(ser)
+        ser.reset_input_buffer()
+        ser.write(ptcbp.serialize_control('get_status'))
+        resp = ser.read(32)
+        if len(resp) == 32:
+            status = ptstatus.unpack_status(resp)
+            break
+        print(f"   ...no status yet (attempt {attempt}/6, got "
+              f"{len(resp)} bytes); retrying...")
+    if status is None:
+        print('** Printer did not respond to status query. Make sure it is '
+              'connected and active in Bluetooth, then try again.')
+        sys.exit(1)
     ptstatus.print_status(status)
 
     if status.err != 0x0000 or status.phase_type != 0x00 or status.phase != 0x0000:
