@@ -385,8 +385,9 @@ class _MixedFont:
             # the WIDTH stays the real text width so long phrases are not
             # cut off.
             h_bbox = self.font.getbbox(
-                "Ag", mode=mode, direction=direction, features=features,
-                language=language, stroke_width=stroke_width, anchor=anchor,
+                _UNIFORM_SAMPLE, mode=mode, direction=direction,
+                features=features, language=language,
+                stroke_width=stroke_width, anchor=anchor,
                 *args, **kwargs)
             w_bbox = self.font.getbbox(
                 clean, mode=mode, direction=direction, features=features,
@@ -448,6 +449,13 @@ def _load_text_font(primary, size, emoji_mode="line", uniform=False,
 # threading an argument through every _load_text_font() call while keeping
 # the option module-wide. An empty string disables the feature.
 _LIGATURES_GLOBAL = ""
+
+# Standard sample used by --uniform-font for the (fixed) measured height
+# and baseline. "Agiy" covers tall ascenders (the 'i' rises above 'A' in
+# many fonts, e.g. DejaVu Sans Mono Bold where 'i' asc=33 vs 'A'=29) and
+# deep descenders (y/g), so no glyph of the actual text overflows the
+# print band once the font is sized from this sample.
+_UNIFORM_SAMPLE = "Agiy"
 
 # Global luminance thresholds (--luma-lo / --luma-hi) for the B/W emoji
 # derivation, set by build_label() like the ligature feature tag.
@@ -688,7 +696,7 @@ def _draw_text_mixed(draw, xy, text, font, fill=None, anchor=None,
     #   the auto-fit used), so every text variant shares a FIXED baseline
     #   and the existing glyphs never shift when a tall letter is added.
     if font._uniform:
-        asc = -font.font.getbbox("Ag", anchor="ls")[1]
+        asc = -font.font.getbbox(_UNIFORM_SAMPLE, anchor="ls")[1]
     else:
         asc = -font.font.getbbox(clean, anchor="ls")[1] \
             if clean.strip() else font.font.getmetrics()[0]
