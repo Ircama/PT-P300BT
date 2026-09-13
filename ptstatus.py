@@ -131,6 +131,7 @@ NOTIFICATIONS = {
 }
 
 class StatusRegister(ctypes.BigEndianStructure):
+    _pack_ = 1  # The wire format is exactly 32 bytes, with no native alignment.
     _fields_ = (
         ('magic', ctypes.c_char * 4),
         ('model', ctypes.c_uint8),

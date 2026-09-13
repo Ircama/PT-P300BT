@@ -9,6 +9,7 @@ import ctypes
 import ptcbp
 import ptstatus
 import serial
+import time
 
 BARS = '123456789'
 
@@ -69,6 +70,34 @@ def configure_printer(ser, raster_lines, tape_dim, compress=True, chaining=False
     # Set compression mode: TIFF
     ser.write(ptcbp.serialize_control('compression', ptcbp.CompressionType.rle if compress else ptcbp.CompressionType.none))
 
+def wait_for_print_completion(ser, timeout=60):
+    """Consume status notifications until the printer finishes the job."""
+    deadline = time.monotonic() + timeout
+    buffer = bytearray()
+    previous_timeout = ser.timeout
+    ser.timeout = 1
+    try:
+        while time.monotonic() < deadline:
+            buffer.extend(ser.read(32 - len(buffer)))
+            if len(buffer) < 32:
+                continue
+            status = ptstatus.unpack_status(bytes(buffer))
+            buffer.clear()
+            ptstatus.print_status(status)
+            if status.err or status.status_type == 0x02:
+                raise RuntimeError(
+                    'Printer reported an error: '
+                    + ptstatus.describe_flag(status.err, ptstatus.ERR_FLAGS)
+                )
+            if status.status_type == 0x01:
+                return
+            if status.status_type == 0x04:
+                raise RuntimeError('Printer powered off before completing the job.')
+        raise TimeoutError(f'Printer did not confirm print completion within {timeout} seconds.')
+    finally:
+        ser.timeout = previous_timeout
+
+
 def do_print_job(ser, args, data):
     print('=> Querying printer status...')
 
@@ -76,7 +105,10 @@ def do_print_job(ser, args, data):
 
     # Dump status
     ser.write(ptcbp.serialize_control('get_status'))
-    status = ptstatus.unpack_status(ser.read(32))
+    response = ser.read(32)
+    if len(response) != 32:
+        raise TimeoutError('Printer did not return a complete status reply.')
+    status = ptstatus.unpack_status(response)
     ptstatus.print_status(status)
 
     if status.err != 0x0000 or status.phase_type != 0x00 or status.phase != 0x0000:
@@ -113,9 +145,9 @@ def do_print_job(ser, args, data):
         # Print and feed
         ser.write(ptcbp.serialize_control('print'))
 
-        # Dump status that the printer returns
-        status = ptstatus.unpack_status(ser.read(32))
-        ptstatus.print_status(status)
+        # A phase-change reply means printing started, not that it finished.
+        # Wait before the caller resets the printer and closes the connection.
+        wait_for_print_completion(ser)
 
     print("=> All done.")
 
@@ -132,14 +164,17 @@ def main():
         else:
             data = read_png(args.image)
 
-    ser = serial.Serial(args.comport)
+    ser = serial.Serial(args.comport, timeout=10, write_timeout=10)
 
     try:
         assert data is not None
         do_print_job(ser, args, data)
     finally:
         # Initialize
-        reset_printer(ser)
+        try:
+            reset_printer(ser)
+        finally:
+            ser.close()
 
 if __name__ == '__main__':
     main()

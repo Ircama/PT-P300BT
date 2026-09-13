@@ -762,7 +762,7 @@ def main():
 
     # Similar to main() in labelmaker.py
     try:
-        ser = serial.Serial(args.comport)
+        ser = serial.Serial(args.comport, timeout=10, write_timeout=10)
     except serial.SerialException:
         p.error(
             'Printer on Bluetooth serial port "'
@@ -777,7 +777,10 @@ def main():
         do_print_job(ser, args, data)
     finally:
         # Initialize
-        reset_printer(ser)
+        try:
+            reset_printer(ser)
+        finally:
+            ser.close()
 
 if __name__ == "__main__":
     main()
