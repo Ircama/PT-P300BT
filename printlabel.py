@@ -638,6 +638,15 @@ def set_args():
         help='List paired Bluetooth devices supporting RFCOMM/SPP and exit.',
         action='store_true'
     )
+    p.add_argument(
+        '--gui',
+        help='Launch the Tkinter GUI instead of printing from the command '
+             'line. COM_PORT/FONT_NAME/TEXT_TO_PRINT are ignored. The GUI '
+             'has its own status panel, so console progress messages are '
+             'suppressed.',
+        action='store_true',
+        default=False,
+    )
     p.add_argument(  
         '--fixed-width',  
         type=int,  
@@ -1691,13 +1700,32 @@ def rasterize_label(image, args):
 
 
 def gui_entry():
-    """Launch the Tkinter GUI."""
-    from ptgui import LabelGUI
-    LabelGUI().mainloop()
+    """Launch the Tkinter GUI.
 
-if __name__ == "__main__":
-    if "--gui" in sys.argv:
-        sys.argv.remove("--gui")
+    The GUI has its own status/log panel, so informational progress
+    messages (font size, tape length, print duration, fit warnings) are
+    suppressed instead of cluttering the console. Real errors raised as
+    _LabelError are still surfaced by the GUI's own error handling.
+    """
+    import contextlib
+    import io as _io
+    try:
+        with contextlib.redirect_stdout(_io.StringIO()):
+            from ptgui import LabelGUI
+            LabelGUI().mainloop()
+    finally:
+        pass
+
+def _run_gui():
+    """Entry point used by '--gui' (and by app launchers): parse args
+    (so the help/validation is consistent) and start the GUI."""
+    _parser = set_args()
+    _args = _parser.parse_args()
+    if _args.gui:
         gui_entry()
     else:
         main()
+
+
+if __name__ == "__main__":
+    _run_gui()

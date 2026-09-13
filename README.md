@@ -19,6 +19,10 @@ This repository provides a command-line tool in pure Python to print from a comp
 - **Multiline Text**: Support for multi-line labels with configurable line spacing
 - **Text Styling**: Configurable fill colors, stroke effects, and text centering
 - **Font Scaling**: Manual font size scaling with percentage-based adjustments
+- **Emoji Support**: Emoji are rendered as raster overlays (in-line sized to their row, or filling the printable area with `--emoji-print-area`), shown in black & white by default (what actually prints) or in color with `--no-mono-emoji`
+- **Uniform Font Sizing** (`--uniform-font`): measure a fixed sample ("Ag") so all labels with the same number of lines use the same font size
+- **OpenType Ligatures** (`--ligatures`): apply font ligatures (e.g. `-->` in Fira Code) via optional uharfbuzz HarfBuzz shaping
+- **TAB Expansion** (`--tab-width`): expand TAB characters to a configurable number of spaces so they never print as a square box
 
 ### Image Processing
 - **Image Integration**: Merge images with text labels
@@ -33,6 +37,16 @@ This repository provides a command-line tool in pure Python to print from a comp
 - **End Margins**: Configurable end margins for label finishing
 - **Auto-cutting**: Optional automatic cutting or label boundary marking
 - **Chain Printing**: Disable feeding for continuous label chains
+- **Configurable Tape Width** (`--tape-width`): plan the label for a smaller printable band (e.g. 6/9 mm) while keeping the 128 px raster compatible with the device (the hardware itself prints on 12 mm tape)
+
+### Graphical Interface (--gui)
+- **Tkinter GUI**: launch a full graphical front-end with `python printlabel.py --gui`
+  - live preview of the label, matching the printed tape 1:1
+  - color emoji rendering in the Text & Font input box
+  - system font browser with per-font sample preview
+  - all options exposed as controls (text, images, merge list, expert settings)
+  - print confirmation dialog and error reporting
+  - console progress messages are suppressed while the GUI is running
 
 ### Advanced Features
 - **Line Spacing Optimization**: Automatic line spacing adjustment when text doesn't fit
@@ -65,21 +79,39 @@ Text can be multiline when the text includes "\n" characters. (Use the two chara
 python printlabel.py -sl COM3 arial.ttf "Line 1\nLine 2\nLine 3"
 ```
 
+### Graphical Interface
+
+A Tkinter GUI is available with all the options exposed as controls, a live
+preview of the label (matching the printed tape 1:1), color emoji in the text
+box, a system font browser with per-font samples, and print confirmation:
+
+```bash
+python printlabel.py --gui
+```
+
+While the GUI is running, console progress messages are suppressed (the GUI
+has its own status/log panel). Tkinter is part of the Python standard library;
+on Debian/Ubuntu install the OS package `python3-tk` if missing.
+
 ## Command Line Arguments
 
 ```
-usage: printlabel.py [-h] [-u] [-l] [-s] [-c] [-i FILE_NAME] [-M FILE_NAME] [-R FLOAT]
-                     [-X DOTS] [-Y DOTS] [-S FILE_NAME] [-n] [-F] [-a] [-m DOTS] [-r] [-C]
-                     [--fill-color FILL] [--stroke-fill STROKE_FILL]
+usage: printlabel.py [-h] [--list-bt] [--gui] [--fixed-width MILLIMETERS]
+                     [--fixed-font-size SIZE] [-u] [-l] [-s] [-c] [-i FILE_NAME]
+                     [-M FILE_NAME] [-R FLOAT] [-X DOTS] [-Y DOTS] [--merge-gap DOTS]
+                     [-S FILE_NAME] [--save-conv FILE_NAME] [-n] [-F] [-a] [-m DOTS] [-r]
+                     [-C] [--fill-color FILL] [--stroke-fill STROKE_FILL]
                      [--stroke-width STROKE_WIDTH] [--text-size MILLIMETERS]
                      [--font-scale NUMBER] [--h-padding DOTS] [--v-shift DOTS]
-                     [-p MULTIPLIER] [-H] [--white-level NUMBER] [--threshold NUMBER]
-                     COM_PORT [FONT_NAME] [TEXT_TO_PRINT ...]
+                     [-p MULTIPLIER] [-H] [--tape-width MILLIMETERS] [--emoji-print-area]
+                     [--uniform-font] [--ligatures] [--mono-emoji | --no-mono-emoji]
+                     [--tab-width SPACES] [--white-level NUMBER] [--threshold NUMBER]
+                     [COM_PORT] [FONT_NAME] [TEXT_TO_PRINT ...]
 ```
 
 Required positional arguments
 
-- `COM_PORT`: Serial port for printer communication (e.g., COM3, /dev/ttyUSB0)
+- `COM_PORT`: Serial port for printer communication (e.g., COM3, /dev/ttyUSB0, or `bt:NAME` for native Bluetooth)
 - `FONT_NAME`: Path to TrueType or OpenType font file (optional, defaults to arial.ttf)
 - `TEXT_TO_PRINT`: Text content for the label (supports multiple arguments)
 
@@ -87,6 +119,10 @@ Optional arguments:
 
 ```
   -h, --help            show this help message and exit
+  --list-bt             List paired Bluetooth devices supporting RFCOMM/SPP and exit.
+  --gui                 Launch the Tkinter GUI instead of printing from the command line.
+                        The GUI has its own status panel, so console progress messages
+                        are suppressed.
   -u, --unicode         Use Unicode escape sequences in TEXT_TO_PRINT.
   -l, --lines           Add horizontal lines for drawing area (dotted red) and tape
                         (cyan).
@@ -103,8 +139,10 @@ Optional arguments:
                         With image merge, shift right the image of X dots.
   -Y DOTS, --y-merge DOTS
                         With image merge, shift down the image of Y dots.
+  --merge-gap DOTS      Horizontal gap (in dots) between a merged image and the text.
   -S FILE_NAME, --save FILE_NAME
                         Save the produced image to a PNG file.
+  --save-conv FILE_NAME Save the converted (rasterized) image sent to the printer.
   -n, --no-print        Only configure the printer and send the image but do not send
                         print command.
   -F, --no-feed         Disable feeding at the end of the print (chaining).
@@ -128,6 +166,21 @@ Optional arguments:
   -p MULTIPLIER, --line-spacing MULTIPLIER
                         Line spacing multiplier for multi-line text (default: 1.2)
   -H, --center-text     Horizontally center text inside the label image.
+  --tape-width MILLIMETERS
+                        Printable tape width in mm (default: 12). The PT-P300BT prints
+                        on 12 mm tape with a fixed raster; values below 12 (e.g. 6, 9)
+                        shrink the printable band the text is auto-sized to, keeping the
+                        128 px raster compatible with the device.
+  --emoji-print-area    Size emoji to fill the printable area (64 px, like merged
+                        images) instead of their line height.
+  --uniform-font        Use the same font size regardless of the specific text (measures
+                        a standard sample "Ag" instead of the actual letters).
+  --ligatures           Apply OpenType ligatures (e.g. "-->" in Fira Code) using
+                        HarfBuzz shaping via uharfbuzz. Requires uharfbuzz.
+  --mono-emoji, --no-mono-emoji
+                        Render emoji as black ink (default) instead of color.
+  --tab-width SPACES
+                        Number of spaces a TAB character expands to (default: 8).
   --white-level NUMBER  Minimum pixel value to consider it "white" when cropping the
                         image. Set it to a value close to 255. (Default: 240)
   --threshold NUMBER    Custom thresholding when converting the image to binary, to

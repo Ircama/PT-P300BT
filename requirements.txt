@@ -9,3 +9,10 @@ uharfbuzz
 # macOS only: native IOBluetooth transport for reliable Bluetooth printing
 # (the /dev/cu.* serial bridge is unreliable for the PT-P300BT). Enables "bt:".
 pyobjc-framework-IOBluetooth ; sys_platform == "darwin"
+
+# Notes:
+# - tkinter (the --gui front-end) is part of the Python standard library on
+#   Windows/macOS and most Linux distributions; pip cannot install it.
+#   On Debian/Ubuntu install the OS package:  sudo apt install python3-tk
+# - numpy is only used by the test helpers, not by the application itself,
+#   so it is intentionally NOT listed here.
