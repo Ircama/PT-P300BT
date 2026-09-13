@@ -76,7 +76,9 @@ python3 printlabel.py COM_PORT FONT_NAME TEXT_TO_PRINT
 - `FONT_NAME`: TrueType/OpenType font file (optional, default `arial.ttf`).
 - `TEXT_TO_PRINT`: text of the label (multiple arguments are joined with spaces; use the literal `\n` for line breaks).
 
-Launch the GUI instead:
+### GUI
+
+Launch the GUI:
 
 ```bash
 python printlabel.py --gui
