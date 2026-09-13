@@ -99,6 +99,13 @@ def set_args():
         default = 12
     )
     p.add_argument(
+        '--merge-gap',
+        metavar='DOTS',
+        type=int,
+        help='Horizontal gap (in dots) between a merged image and the text.',
+        default = 0
+    )
+    p.add_argument(
         '-S', '--save',
         metavar='FILE_NAME',
         help='Save the produced image to a PNG file.'
@@ -346,8 +353,17 @@ def draw_multiline_text(
 def main():
     p = set_args()
     args = p.parse_args()
-    if args.comport not in [p.device for p in list_ports.comports()]:
-        print("Port '" + args.comport + "' does not seem a valid serial communication port.")        
+    if not args.comport.startswith("bt:") and \
+            args.comport not in [p.device for p in list_ports.comports()]:
+        print("Port '" + args.comport + "' does not seem a valid serial communication port.")
+    # Legacy -i/--image: print the given image as the whole label, ignoring text
+    # and font. The image-building code below only ever ran in the non-legacy
+    # branch, so -i used to leave `data` unset and crash; route it through the
+    # (working) merge path with empty text instead.
+    if args.image is not None:
+        args.merge = [args.image] + (args.merge or [])
+        args.text_to_print = []
+        args.image = None
     data = None
     if args.image is None: # not using the legacy mode
         height_of_the_printable_area = 64  # px: number of vertical pixels of the PT-P300BT printer (9 mm)
@@ -601,13 +617,14 @@ def main():
                 )
                 if not loaded_image:
                     p.error(f'Invalid image "{i}"')
+                gap = args.merge_gap if image.width else 0
                 dst = Image.new(
                     "RGB",
-                    (loaded_image.width + image.width, height_of_the_image),
+                    (loaded_image.width + gap + image.width, height_of_the_image),
                     "white"
                 )
                 dst.paste(loaded_image, (args.x_merge, args.y_merge))
-                dst.paste(image, (loaded_image.width, 0))
+                dst.paste(image, (loaded_image.width + gap, 0))
                 image = dst
             # Convert the image to binary
             draw = ImageDraw.Draw(image)
@@ -738,31 +755,42 @@ def main():
         # Check max tape length
         if print_length > 499:
             print("Print length exceeding 49.9 cm = 19.6 in")
-            quit()
+            sys.exit()
 
         # Image save and show
         if args.save:
             print(f'Saving image "{args.save}".')
             image.save(args.save)
             if args.no_print:
-                quit()
+                sys.exit()
         if args.show:
             try:
                 image.show()
             except Exception as e:
                 p.error("Cannot show image:" + repr(e))
             if not args.show_conv and args.no_print:
-                quit()
+                sys.exit()
         if args.show_conv:
             padded.show()
             if args.no_print:
-                quit()
+                sys.exit()
 
         data = padded.tobytes()
 
     # Similar to main() in labelmaker.py
     try:
-        ser = serial.Serial(args.comport)
+        if args.comport.startswith("bt:"):
+            # Native macOS IOBluetooth RFCOMM transport (pure Python via PyObjC).
+            # The /dev/cu.* Bluetooth-serial bridge is unreliable for this printer
+            # (pyserial's close() doesn't drain the macOS run loop, so the RFCOMM
+            # channel is left half-open and the next open() hangs). "bt:NAME"
+            # matches the paired device whose name contains NAME (default PT-P300).
+            sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "native"))
+            from btnative import BTSerial
+            name = args.comport[3:] or "PT-P300"
+            ser = BTSerial(name=name, timeout=3)
+        else:
+            ser = serial.Serial(args.comport, timeout=3)
     except serial.SerialException:
         p.error(
             'Printer on Bluetooth serial port "'
