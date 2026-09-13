@@ -2,6 +2,10 @@ pyserial
 pillow
 packbits
 pdf2image
+fonttools
+# Optional: OpenType ligature shaping (--ligatures). Without it the flag
+# is ignored and text renders identically.
+uharfbuzz
 # macOS only: native IOBluetooth transport for reliable Bluetooth printing
 # (the /dev/cu.* serial bridge is unreliable for the PT-P300BT). Enables "bt:".
 pyobjc-framework-IOBluetooth ; sys_platform == "darwin"

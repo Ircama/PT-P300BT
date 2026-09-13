@@ -120,6 +120,11 @@ HELPS = {
         "with the same number of lines use the same font size.\n"
         "Useful when printing a batch where \"cao\" should not come out "
         "larger than \"ciao\"."),
+    "ligatures": (
+        "OpenType ligatures (--ligatures).\n"
+        "On: text runs are shaped with HarfBuzz so font ligatures are "
+        "applied (e.g. \"-->\" in Fira Code). Requires uharfbuzz to be "
+        "installed; without it the option has no effect."),
     "tab_width": (
         "TAB width in spaces (--tab-width).\n"
         "TAB characters in the text are expanded to this many spaces "
@@ -128,6 +133,11 @@ HELPS = {
         "Font scale factor in percent.\n"
         "100 = the natural font size. Values < 100 shrink the text,\n"
         "values > 100 enlarge it. Scales proportionally per line."),
+    "tape_width": (
+        "Printable tape width in mm (default 12).\n"
+        "The PT-P300BT prints on 12 mm tape with a fixed raster; values "
+        "below 12 (e.g. 6, 9) shrink the printable band the text is "
+        "auto-sized to, keeping the raster compatible with the device."),
     "line_spacing": (
         "Line spacing multiplier.\n"
         "1.0 = single spacing; 1.2 = 20% extra space between lines.\n"
@@ -503,6 +513,8 @@ class LabelGUI(tk.Tk):
               default=True, command=self._on_mono_toggled)
         check(g, "Uniform font sizing (--uniform-font)",
               "uniform_font")
+        check(g, "OpenType ligatures (--ligatures)",
+              "ligatures")
         pair(g, "TAB width (spaces):", "tab_width", 8)
 
         # ---------------- Expert: text tuning ----------------
@@ -513,6 +525,7 @@ class LabelGUI(tk.Tk):
         pair(g, "V shift (dots):", "v_shift", 0)
         pair(g, "Text width (mm, 0=auto):", "text_size", 0)
         pair(g, "Fixed width (mm, 0=off):", "fixed_width", 0)
+        pair(g, "Tape width (mm, 12):", "tape_width", 12.0)
         pair(g, "Fixed font size (0=auto):", "fixed_font_size", 0)
         pair(g, "Fill color:", "fill", "black")
         pair(g, "Stroke fill:", "stroke_fill", "")
@@ -1216,8 +1229,10 @@ class LabelGUI(tk.Tk):
             v_shift=num("v_shift", int, 0),
             line_spacing=num("line_spacing", float, 1.2),
             center_text=v["center_text"].get(),
+            tape_width=num("tape_width", float, 12.0),
             emoji_print_area=v["emoji_print_area"].get(),
             uniform_font=v["uniform_font"].get(),
+            ligatures=v["ligatures"].get(),
             mono_emoji=v["mono_emoji"].get(),
             tab_width=num("tab_width", int, 8),
             white_level=num("white_level", int, 240),

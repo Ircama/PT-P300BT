@@ -178,9 +178,10 @@ class _MixedFont:
     """
 
     def __init__(self, primary, size, emoji_path, emoji_mode="line",
-                 uniform=False, mono=True):
+                 uniform=False, mono=True, ligatures=False):
         self.font = ImageFont.truetype(primary, size, encoding="utf-8")
         self.size = size
+        self._ligatures = ligatures
         self._emoji_mode = emoji_mode or "line"
         # uniform=True: the auto-fit measures a fixed sample ("Ag") instead
         # of the specific text, so all texts of the same line count get the
@@ -194,6 +195,7 @@ class _MixedFont:
         # Primary font cmap (cached per path): which chars need the emoji.
         self._primary_cmap = None
         primary_path = getattr(self.font, "path", None) or primary
+        self._path = primary_path
         try:
             key = os.path.normcase(os.path.abspath(primary_path))
         except Exception:
@@ -378,11 +380,151 @@ class _MixedFont:
 
 
 def _load_text_font(primary, size, emoji_mode="line", uniform=False,
-                    mono=True):
+                    mono=True, ligatures=None):
     """Create a font for drawing text, with emoji raster overlay."""
+    if ligatures is None:
+        ligatures = _LIGATURES_GLOBAL
     epath, _cmap = _find_emoji_font()
     return _MixedFont(primary, size, epath, emoji_mode=emoji_mode,
-                      uniform=uniform, mono=mono)
+                      uniform=uniform, mono=mono, ligatures=ligatures)
+
+
+# Global ligature flag set by build_label(); avoids threading an argument
+# through every _load_text_font() call while keeping the option module-wide.
+_LIGATURES_GLOBAL = False
+
+
+# ---------------------------------------------------------------------------
+# Ligature support (--ligatures)
+# ---------------------------------------------------------------------------
+# uharfbuzz is optional: when present, text runs are shaped with HarfBuzz so
+# OpenType ligatures (e.g. "-->" in Fira Code) are applied, then each glyph
+# is rendered directly from the font outline. Without uharfbuzz the option
+# is silently ignored and the classic text rendering is used.
+_LIG_CACHE = {}  # (font_path, size, text) -> shape plan
+
+
+def _lig_shape(font_path, size, text):
+    """Shape `text` with HarfBuzz -> (upem, [(glyph_id, x_advance)]).
+
+    Returns None when uharfbuzz is unavailable (or shaping fails), which
+    makes the caller fall back to plain Pillow text rendering.
+    """
+    key = (font_path, size, text)
+    if key in _LIG_CACHE:
+        return _LIG_CACHE[key]
+    plan = None
+    try:
+        import uharfbuzz as hb
+        blob = hb.Blob.from_file_path(font_path)
+        face = hb.Face(blob)
+        font = hb.Font(face)
+        upem = face.upem
+        buf = hb.Buffer()
+        buf.add_str(text)
+        buf.guess_segment_properties()
+        hb.shape(font, buf)
+        plan = (upem, [(info.codepoint, pos.x_advance)
+                       for info, pos in zip(buf.glyph_infos,
+                                            buf.glyph_positions)])
+    except Exception:
+        plan = None
+    _LIG_CACHE[key] = plan
+    return plan
+
+
+def _lig_draw_glyph(draw, glyph_id, xy, font_path, size_px, fill):
+    """Render glyph `glyph_id` from the TTF outline at the given position.
+
+    xy is the baseline origin. The glyph silhouette is drawn with the
+    same raster black fill as normal text. Silently skips glyphs that
+    cannot be rendered (composite or missing).
+    """
+    try:
+        from fontTools.ttLib import TTFont
+        from fontTools.pens.recordingPen import RecordingPen
+
+        ttfont = _LIG_CACHE.get(("_ttfont", font_path))
+        if ttfont is None:
+            # lazy=False so the glyf contours are actually loaded.
+            ttfont = TTFont(font_path, fontNumber=0, lazy=False)
+            _LIG_CACHE[("_ttfont", font_path)] = ttfont
+        glyf = ttfont["glyf"]
+        gname = ttfont.getGlyphOrder()[glyph_id] if \
+            glyph_id < len(ttfont.getGlyphOrder()) else None
+        if gname is None or gname not in glyf:
+            return
+        glyph = glyf[gname]
+        if glyph.isComposite():
+            return  # composite glyphs are too complex to rasterize here
+
+        upem = ttfont["head"].unitsPerEm
+        sx = size_px / upem
+        x0, y0 = xy
+
+        rpen = RecordingPen()
+        glyph.draw(rpen, glyf)
+        commands = rpen.value
+
+        def _bez(p0, p1, p2, p3, n=12):
+            pts = []
+            for t in range(n + 1):
+                t /= n
+                mt = 1 - t
+                pts.append((
+                    mt**3 * p0[0] + 3 * mt**2 * t * p1[0] +
+                    3 * mt * t**2 * p2[0] + t**3 * p3[0],
+                    mt**3 * p0[1] + 3 * mt**2 * t * p1[1] +
+                    3 * mt * t**2 * p2[1] + t**3 * p3[1],
+                ))
+            return pts
+
+        def _qbez(p0, p1, p2, n=12):
+            pts = []
+            for t in range(n + 1):
+                t /= n
+                mt = 1 - t
+                pts.append((
+                    mt**2 * p0[0] + 2 * mt * t * p1[0] + t**2 * p2[0],
+                    mt**2 * p0[1] + 2 * mt * t * p1[1] + t**2 * p2[1],
+                ))
+            return pts
+
+        def _scale(p):
+            # TT outlines grow y upward; screen coordinates grow y
+            # downward, so negate the y component around the baseline.
+            return (x0 + p[0] * sx, y0 - p[1] * sx)
+
+        polygons = []
+        cur = []
+        for op, args in commands:
+            if op == "moveTo":
+                if cur:
+                    polygons.append(cur)
+                cur = [_scale(args[0])]
+            elif op == "lineTo":
+                cur.append(_scale(args[0]))
+            elif op == "curveTo":
+                p0 = _scale(cur[-1])
+                p1, p2, p3 = (_scale(args[0]), _scale(args[1]),
+                               _scale(args[2]))
+                cur.extend(_bez(p0, p1, p2, p3))
+            elif op == "qCurveTo":
+                p0 = _scale(cur[-1])
+                p1, p2 = _scale(args[0]), _scale(args[1])
+                cur.extend(_qbez(p0, p1, p2))
+            elif op == "closePath":
+                if cur:
+                    polygons.append(cur)
+                cur = []
+        if cur:
+            polygons.append(cur)
+
+        for poly in polygons:
+            if len(poly) >= 3:
+                draw.polygon(poly, fill=fill)
+    except Exception:
+        pass
 
 
 def _draw_text_mixed(draw, xy, text, font, fill=None, anchor=None,
@@ -439,10 +581,33 @@ def _draw_text_mixed(draw, xy, text, font, fill=None, anchor=None,
                 x0 += w
         else:
             if "\n" not in chunk:
-                draw.text((x0, baseline), chunk, font=font_used, fill=fill,
-                          anchor="ls", stroke_width=stroke_width,
-                          stroke_fill=stroke_fill)
-                x0 += font_used.getlength(chunk)
+                if getattr(font, "_ligatures", False):
+                    # OpenType ligature shaping (--ligatures): shape the
+                    # run with HarfBuzz and draw each resulting glyph, so
+                    # ligatures produced by the font (e.g. "-->" in Fira
+                    # Code) are actually applied.
+                    shaped = _lig_shape(font._path, font.size, chunk)
+                    if shaped is not None:
+                        upem, plan = shaped
+                        pen_x = x0
+                        for glyph_id, x_adv in plan:
+                            _lig_draw_glyph(
+                                draw, glyph_id, (pen_x, baseline),
+                                font._path, font.size, fill)
+                            pen_x += x_adv * font.size / upem
+                        x0 += sum(a for _g, a in plan) * font.size / upem
+                    else:
+                        draw.text((x0, baseline), chunk, font=font_used,
+                                  fill=fill, anchor="ls",
+                                  stroke_width=stroke_width,
+                                  stroke_fill=stroke_fill)
+                        x0 += font_used.getlength(chunk)
+                else:
+                    draw.text((x0, baseline), chunk, font=font_used,
+                              fill=fill, anchor="ls",
+                              stroke_width=stroke_width,
+                              stroke_fill=stroke_fill)
+                    x0 += font_used.getlength(chunk)
             else:
                 # Safety: real newlines in a chunk (API misuse): draw each
                 # line on its own baseline without an anchor.
@@ -662,6 +827,16 @@ def set_args():
         action='store_true'
     )
     p.add_argument(
+        '--tape-width',
+        type=float,
+        metavar='MILLIMETERS',
+        default=12.0,
+        help='Printable tape width in mm (default: 12). The PT-P300BT prints '
+             'on 12 mm tape with a fixed raster; values below 12 (e.g. 6, 9) '
+             'shrink the printable band the text is auto-sized to, keeping the '
+             '128 px raster compatible with the device.'
+    )
+    p.add_argument(
         '--emoji-print-area',
         help='Size emoji to fill the printable area (64 px, like merged'
              ' images) instead of their line height.',
@@ -675,6 +850,15 @@ def set_args():
              ' and descents) instead of the actual letters. All texts with'
              ' the same number of lines then get the same size, e.g. "cao"'
              ' and "ciao".',
+        action='store_true',
+        default=False,
+    )
+    p.add_argument(
+        '--ligatures',
+        help='Apply OpenType ligatures (e.g. "-->" in Fira Code) using'
+             ' HarfBuzz shaping via uharfbuzz. Requires uharfbuzz to be'
+             ' installed; without it the option is ignored and text is'
+             ' drawn identically to the default.',
         action='store_true',
         default=False,
     )
@@ -990,6 +1174,8 @@ def build_label(args):
 
     Raises _LabelError on invalid parameters (instead of exiting).
     """
+    global _LIGATURES_GLOBAL
+    _LIGATURES_GLOBAL = bool(getattr(args, "ligatures", False))
     # Legacy -i/--image: print the given image as the whole label, ignoring text
     # and font. The image-building code below only ever ran in the non-legacy
     # branch, so -i used to leave `data` unset and crash; route it through the
@@ -1000,8 +1186,21 @@ def build_label(args):
         args.image = None
     data = None
     if args.image is None: # not using the legacy mode
-        height_of_the_printable_area = 64  # px: number of vertical pixels of the PT-P300BT printer (9 mm)
-        height_of_the_tape = 86  # 64 px / 9 mm * 12 mm (the borders over the printable area will not be printed)
+        # The PT-P300BT prints on 12 mm TZe tape with a fixed 128 px raster
+        # (the hardware does not physically support narrower tape). The
+        # --tape-width option lets the author plan for a smaller printable
+        # band (e.g. 6 / 9 mm): the text is auto-sized for the requested
+        # band while the physical 128 px raster is kept, so the output is
+        # still compatible with the device. Default 12 mm keeps the exact
+        # original behaviour (printable area = 64 px for a 9 mm band).
+        tape_mm = max(3.5, min(12.0, float(getattr(args, "tape_width", 12.0) or 12.0)))
+        height_of_the_tape = 86  # 12 mm tape height in px
+        # Printable area (px) scales with the tape width: the 12 mm tape
+        # offers a 9 mm printable band (64 px), so smaller tapes get a
+        # proportionally smaller band (6 mm -> 32 px, 9 mm -> 48 px).
+        height_of_the_printable_area = int(
+            round(64.0 * tape_mm / 12.0)
+        )
         height_of_the_image = 88  # px (can be any value >= height_of_the_tape, but height_of_the_tape + 2 border lines is good)
 
         # Compute max TT font size to remain within height_of_the_printable_area
@@ -1352,10 +1551,13 @@ def build_label(args):
             target_width_dots = int(round(args.fixed_width / 0.149))  
             current_width = image.width  
             if current_width < target_width_dots:  
-                # Create a new white image of target width and paste the existing image centered or left-aligned  
+                # Create a new white image of target width and paste the existing image
+                # centered when -H/--center-text was requested, otherwise left-aligned.
                 padded_image = Image.new("RGB", (target_width_dots, image.height), "white")  
-                # Example: left-aligned paste; change x_offset for centering  
-                x_offset = 0  
+                if args.center_text:
+                    x_offset = (target_width_dots - current_width) // 2
+                else:
+                    x_offset = 0  
                 padded_image.paste(image, (x_offset, 0))  
                 image = padded_image
 
