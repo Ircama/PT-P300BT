@@ -107,7 +107,13 @@ def do_print_job(ser, args, data):
     status = None
     for attempt in range(1, 7):
         reset_printer(ser)
-        ser.reset_input_buffer()
+        # Not every serial-like transport exposes reset_input_buffer()
+        # (e.g. lightweight fakes in tests): drain defensively when the
+        # method exists, otherwise just proceed - the retry loop and the
+        # 32-byte read below absorb any stale bytes.
+        reset_input_buffer = getattr(ser, 'reset_input_buffer', None)
+        if reset_input_buffer is not None:
+            reset_input_buffer()
         ser.write(ptcbp.serialize_control('get_status'))
         resp = ser.read(32)
         if len(resp) == 32:
