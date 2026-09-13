@@ -264,9 +264,17 @@ pip install -r requirements.txt
 ```mermaid
 graph LR
     printlabel.py:::highlight --> labelmaker.py
+    printlabel.py --> ptgui.py
+    printlabel.py --> fontbrowser.py
     labelmaker.py --> labelmaker_encode.py
     labelmaker.py --> ptcbp.py
     labelmaker.py --> ptstatus.py
+    ptgui.py --> printlabel.py
+    ptgui.py --> fontbrowser.py
+    labelmaker_encode.py --> ptcbp.py
+    ptstatus.py --> ptcbp.py
+    native/btcommon.py --> native/btnative.py[btnative.py - macOS]
+    native/ptprobe.py --> native/btnative.py[btnative.py - macOS]
 
     subgraph Project_Support_Files[Project Support Files]
         requirements[requirements.txt]
@@ -274,8 +282,34 @@ graph LR
         readme[README.md]
     end
 
+    subgraph Tests[Tests]
+        test_print_status.py --> labelmaker.py
+        test_print_status.py --> ptstatus.py
+    end
+
     classDef highlight fill:#ffeb3b,stroke:#fbc02d,stroke-width:3px;
 ```
+
+- **`printlabel.py`** — CLI entry point and the label builder: font auto-fit,
+  emoji raster overlay, GSUB feature shaping (`--ligatures`), image merge;
+  launches the Tkinter GUI with `--gui` and lists fonts via `fontbrowser.py`.
+- **`ptgui.py`** — Tkinter GUI front-end (live preview, system font browser,
+  all options exposed as controls); imported lazily by `printlabel --gui`.
+- **`labelmaker.py`** — printer communication: device setup, raster transfer,
+  `do_print_job()` and `wait_for_print_completion()` status polling loop.
+- **`labelmaker_encode.py`** — raster encoding (TIFF/RLE compression) and
+  `read_png()` binary conversion for the printer protocol.
+- **`ptcbp.py`** — Brother P-Touch command building blocks (commands,
+  serialization, status query); shared by encoder, status and printer layers.
+- **`ptstatus.py`** — 32-byte status register ctypes layout, `unpack_status()`,
+  flag descriptions and pretty printing of printer status replies.
+- **`fontbrowser.py`** — cross-platform system font discovery (feeds the GUI
+  dropdown and `--list-ligatures`).
+- **`native/`** — native transport layer: `btcommon.py` selects the platform
+  backend (Windows SPP / macOS IOBluetooth via `btnative.py` / Linux rfcomm);
+  `ptprobe.py` is a macOS-only Bluetooth probe helper.
+- **`test_print_status.py`** — unit tests for the status polling: layout size,
+  wait-for-completion, timeout restore, battery / power-off failures.
 
 ## Bluetooth printer connection on Windows
 
