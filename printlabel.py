@@ -392,6 +392,16 @@ class _MixedFont:
                 clean, mode=mode, direction=direction, features=features,
                 language=language, stroke_width=stroke_width, anchor=anchor,
                 *args, **kwargs)
+            if has_emoji_target and any(self.is_emoji(ch) for ch in text) \
+                    and not self._emoji_band:
+                # Inline (line mode) with emoji: the width must also
+                # include the emoji rasters, exactly like in the regular
+                # mode below, or the label would be too short and cut the
+                # text after the last emoji.
+                w = int(round(self.getlength(text)))
+                if anchor == "lt":
+                    return (0, 0, w, h_bbox[3] - h_bbox[1])
+                return (w_bbox[0], h_bbox[1], w_bbox[0] + w, h_bbox[3])
             if anchor == "lt":
                 return (w_bbox[0], h_bbox[1], w_bbox[2],
                         h_bbox[3] - h_bbox[1])
