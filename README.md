@@ -96,17 +96,16 @@ on Debian/Ubuntu install the OS package `python3-tk` if missing.
 ## Command Line Arguments
 
 ```
-usage: printlabel.py [-h] [--list-bt] [--gui] [--fixed-width MILLIMETERS]
-                     [--fixed-font-size SIZE] [-u] [-l] [-s] [-c] [-i FILE_NAME]
-                     [-M FILE_NAME] [-R FLOAT] [-X DOTS] [-Y DOTS] [--merge-gap DOTS]
-                     [-S FILE_NAME] [--save-conv FILE_NAME] [-n] [-F] [-a] [-m DOTS] [-r]
-                     [-C] [--fill-color FILL] [--stroke-fill STROKE_FILL]
-                     [--stroke-width STROKE_WIDTH] [--text-size MILLIMETERS]
-                     [--font-scale NUMBER] [--h-padding DOTS] [--v-shift DOTS]
-                     [-p MULTIPLIER] [-H] [--tape-width MILLIMETERS] [--emoji-print-area]
-                     [--uniform-font] [--ligatures FEATURE] [--list-ligatures [FONT_NAME]]
-                     [--mono-emoji | --no-mono-emoji] [--luma-lo NUMBER] [--luma-hi NUMBER]
-                     [--tab-width SPACES] [--white-level NUMBER] [--threshold NUMBER]
+usage: printlabel.py [-h] [--list-bt] [--gui] [--fixed-width MILLIMETERS] [--fixed-font-size SIZE]
+                     [-u] [-l] [-s] [-c] [-i FILE_NAME] [-M FILE_NAME] [-R FLOAT] [-X DOTS]
+                     [-Y DOTS] [--merge-gap DOTS] [-S FILE_NAME] [--save-conv FILE_NAME] [-n] [-F]
+                     [-a] [-m DOTS] [-r] [-C] [--fill-color FILL] [--stroke-fill STROKE_FILL]
+                     [--stroke-width STROKE_WIDTH] [--text-size MILLIMETERS] [--font-scale NUMBER]
+                     [--h-padding DOTS] [--v-shift DOTS] [-p MULTIPLIER] [-H]
+                     [--tape-width MILLIMETERS] [--emoji-print-area] [--uniform-font]
+                     [--ligatures FEATURE] [--list-ligatures [FONT_NAME]] [--luma-lo NUMBER]
+                     [--luma-hi NUMBER] [--mono-emoji | --no-mono-emoji] [--tab-width SPACES]
+                     [--white-level NUMBER] [--threshold NUMBER]
                      [COM_PORT] [FONT_NAME] [TEXT_TO_PRINT ...]
 ```
 
@@ -122,16 +121,19 @@ Optional arguments:
   -h, --help            show this help message and exit
   --list-bt             List paired Bluetooth devices supporting RFCOMM/SPP and exit.
   --gui                 Launch the Tkinter GUI instead of printing from the command line.
-                        The GUI has its own status panel, so console progress messages
-                        are suppressed.
+                        COM_PORT/FONT_NAME/TEXT_TO_PRINT are ignored. The GUI has its own status
+                        panel, so console progress messages are suppressed.
+  --fixed-width MILLIMETERS
+                        Pad label to exact width in mm (adds whitespace if text is shorter).
+  --fixed-font-size SIZE
+                        Use fixed font size (disables auto-sizing to fit printable area)
   -u, --unicode         Use Unicode escape sequences in TEXT_TO_PRINT.
-  -l, --lines           Add horizontal lines for drawing area (dotted red) and tape
-                        (cyan).
+  -l, --lines           Add horizontal lines for drawing area (dotted red) and tape (cyan).
   -s, --show            Show the created image. (If also using -n, terminate.)
   -c, --show-conv       Show the converted image. (If also using -n, terminate.)
   -i FILE_NAME, --image FILE_NAME
-                        Image file to print. If this option is used (legacy mode),
-                        TEXT_TO_PRINT and FONT_NAME are ignored.
+                        Image file to print. If this option is used (legacy mode), TEXT_TO_PRINT and
+                        FONT_NAME are ignored.
   -M FILE_NAME, --merge FILE_NAME
                         Merge the image file before the text. Can be used multiple times.
   -R FLOAT, --resize FLOAT
@@ -143,9 +145,9 @@ Optional arguments:
   --merge-gap DOTS      Horizontal gap (in dots) between a merged image and the text.
   -S FILE_NAME, --save FILE_NAME
                         Save the produced image to a PNG file.
-  --save-conv FILE_NAME Save the converted (rasterized) image sent to the printer.
-  -n, --no-print        Only configure the printer and send the image but do not send
-                        print command.
+  --save-conv FILE_NAME
+                        Save the converted (rasterized) image sent to the printer to a PNG file.
+  -n, --no-print        Only configure the printer and send the image but do not send print command.
   -F, --no-feed         Disable feeding at the end of the print (chaining).
   -a, --auto-cut        Enable auto-cutting (or print label boundary on e.g. PT-P300BT).
   -m DOTS, --end-margin DOTS
@@ -160,48 +162,47 @@ Optional arguments:
   --text-size MILLIMETERS
                         Horizontally stretch the text to fit the specified size.
   --font-scale NUMBER   Scale font size by specified percentage (default: 100%)
-  --h-padding DOTS      Define custom left and right horizontal padding in pixels
-                        (default: 5 pixels left and 5 pixels right)
-  --v-shift DOTS        Define relative vertical translation in pixels (default is to
-                        vertically center the font)
+  --h-padding DOTS      Define custom left and right horizontal padding in pixels (default: 5 pixels
+                        left and 5 pixels right)
+  --v-shift DOTS        Define relative vertical traslation in pixels (default is to vertically
+                        center the font)
   -p MULTIPLIER, --line-spacing MULTIPLIER
                         Line spacing multiplier for multi-line text (default: 1.2)
   -H, --center-text     Horizontally center text inside the label image.
   --tape-width MILLIMETERS
-                        Printable tape width in mm (default: 12). The PT-P300BT prints
-                        on 12 mm tape with a fixed raster; values below 12 (e.g. 6, 9)
-                        shrink the printable band the text is auto-sized to, keeping the
-                        128 px raster compatible with the device.
-  --emoji-print-area    Size emoji to fill the printable area (64 px, like merged
-                        images) instead of their line height.
-  --uniform-font        Use the same font size regardless of the specific text (measures
-                        a standard sample "Ag" instead of the actual letters).
-  --ligatures FEATURE  Enable a GSUB feature of the selected font (requires
-                       uharfbuzz). The feature name is the OpenType tag, e.g.
-                       "calt" (contextual alternates, arrows in Fira Code),
-                       "liga" (standard ligatures) or "dlig". Repeat the option
-                       to enable several features. Text is shaped with HarfBuzz
-                       but only the substituted (ligature) glyphs are drawn
-                       differently; all normal characters stay exactly as they
-                       are. Use --list-ligatures to see the features the font
-                       actually exposes.
+                        Printable tape width in mm (default: 12). The PT-P300BT prints on 12 mm tape
+                        with a fixed raster; values below 12 (e.g. 6, 9) shrink the printable band
+                        the text is auto-sized to, keeping the 128 px raster compatible with the
+                        device.
+  --emoji-print-area    Size emoji to fill the printable area (64 px, like merged images) instead of
+                        their line height.
+  --uniform-font        Use the same font size regardless of the specific text: the auto-fit
+                        measures a standard sample ("Ag", covering ascents and descents) instead of
+                        the actual letters. All texts with the same number of lines then get the
+                        same size, e.g. "cao" and "ciao".
+  --ligatures FEATURE   Enable a GSUB feature of the selected font (requires uharfbuzz). The feature
+                        name is the OpenType tag, e.g. "calt" (contextual alternates, arrows in Fira
+                        Code), "liga" (standard ligatures) or "dlig" (discretionary ligatures).
+                        Repeat the option to enable several features. Text is shaped with HarfBuzz
+                        but only the substituted (ligature) glyphs are drawn differently; all normal
+                        characters stay exactly as they are. Use --list-ligatures to see the
+                        features the font actually exposes.
   --list-ligatures [FONT_NAME]
-                       List the OpenType GSUB features of the selected font and
-                       exit. Use a tag from the list with --ligatures.
+                        List the OpenType GSUB features of the selected font and exit. Use a tag
+                        from the list with --ligatures.
+  --luma-lo NUMBER      Monochrome emoji cut: luminance below this value becomes solid black ink
+                        (default: 140).
+  --luma-hi NUMBER      Monochrome emoji cut: luminance above this value becomes transparent
+                        (default: 175). Values between LO and HI fade with antialiasing.
   --mono-emoji, --no-mono-emoji
-                       Render emoji as black ink (default) instead of color.
-  --luma-lo NUMBER     Monochrome emoji cut: luminance below this value becomes
-                       solid black ink (default: 140).
-  --luma-hi NUMBER     Monochrome emoji cut: luminance above this value becomes
-                       transparent (default: 175). Values between LO and HI
-                       fade with antialiasing.
-  --tab-width SPACES
-                        Number of spaces a TAB character expands to (default: 8).
-  --white-level NUMBER  Minimum pixel value to consider it "white" when cropping the
-                        image. Set it to a value close to 255. (Default: 240)
-  --threshold NUMBER    Custom thresholding when converting the image to binary, to
-                        manually decide which pixel values become black or white (Default:
-                        75)
+                        Render emoji as black ink (--mono-emoji, default) instead of in their
+                        embedded colors (--no-mono-emoji). The thermal print is 1-bit, so mono
+                        matches what actually prints. (default: True)
+  --tab-width SPACES    Number of spaces a TAB character expands to (default: 8).
+  --white-level NUMBER  Minimum pixel value to consider it "white" when cropping the image. Set it
+                        to a value close to 255. (Default: 240)
+  --threshold NUMBER    Custom thresholding when converting the image to binary, to manually decide
+                        which pixel values become black or white (Default: 75)
 ```
 
 ## Usage details

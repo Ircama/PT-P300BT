@@ -668,9 +668,12 @@ def _draw_text_mixed(draw, xy, text, font, fill=None, anchor=None,
                       stroke_width=stroke_width,
                       stroke_fill=stroke_fill)
         return
-    asc = -font.font.getbbox(clean, anchor="ls")[1] \
-        if clean.strip() else font.font.getmetrics()[0]
-    baseline = y0 + asc
+    # Baseline from the FONT's ascent (constant), exactly like PIL's
+    # draw.text anchors: characters sit on a fixed baseline, so adding a
+    # tall letter (e.g. the 'l' in "acca" -> "accal") NEVER shifts the
+    # existing glyphs — with --uniform-font every text variant then lands
+    # in the same vertical place instead of floating up/down.
+    baseline = y0 + font.font.getmetrics()[0]
     for font_used, chunk in font._split(text):
         if font_used is None:
             # Emoji slot(s): paste the raster at the slot position, top
