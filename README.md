@@ -21,7 +21,7 @@ This repository provides a command-line tool in pure Python to print from a comp
 - **Font Scaling**: Manual font size scaling with percentage-based adjustments
 - **Emoji Support**: Emoji are rendered as raster overlays (in-line sized to their row, or filling the printable area with `--emoji-print-area`), shown in black & white by default (what actually prints) or in color with `--no-mono-emoji`
 - **Uniform Font Sizing** (`--uniform-font`): measure a fixed sample ("Ag") so all labels with the same number of lines use the same font size
-- **OpenType Ligatures** (`--ligatures`): apply font ligatures (e.g. `-->` in Fira Code) via optional uharfbuzz HarfBuzz shaping
+- **OpenType Features** (`--ligatures FEATURE`): apply a GSUB feature of the selected font (e.g. `calt` for the arrows in Fira Code, `liga`/`dlig`) via optional uharfbuzz shaping; `--list-ligatures` shows which features the font exposes
 - **TAB Expansion** (`--tab-width`): expand TAB characters to a configurable number of spaces so they never print as a square box
 
 ### Image Processing
@@ -104,7 +104,8 @@ usage: printlabel.py [-h] [--list-bt] [--gui] [--fixed-width MILLIMETERS]
                      [--stroke-width STROKE_WIDTH] [--text-size MILLIMETERS]
                      [--font-scale NUMBER] [--h-padding DOTS] [--v-shift DOTS]
                      [-p MULTIPLIER] [-H] [--tape-width MILLIMETERS] [--emoji-print-area]
-                     [--uniform-font] [--ligatures] [--mono-emoji | --no-mono-emoji]
+                     [--uniform-font] [--ligatures FEATURE] [--list-ligatures [FONT_NAME]]
+                     [--mono-emoji | --no-mono-emoji] [--luma-lo NUMBER] [--luma-hi NUMBER]
                      [--tab-width SPACES] [--white-level NUMBER] [--threshold NUMBER]
                      [COM_PORT] [FONT_NAME] [TEXT_TO_PRINT ...]
 ```
@@ -175,10 +176,25 @@ Optional arguments:
                         images) instead of their line height.
   --uniform-font        Use the same font size regardless of the specific text (measures
                         a standard sample "Ag" instead of the actual letters).
-  --ligatures           Apply OpenType ligatures (e.g. "-->" in Fira Code) using
-                        HarfBuzz shaping via uharfbuzz. Requires uharfbuzz.
+  --ligatures FEATURE  Enable a GSUB feature of the selected font (requires
+                       uharfbuzz). The feature name is the OpenType tag, e.g.
+                       "calt" (contextual alternates, arrows in Fira Code),
+                       "liga" (standard ligatures) or "dlig". Repeat the option
+                       to enable several features. Text is shaped with HarfBuzz
+                       but only the substituted (ligature) glyphs are drawn
+                       differently; all normal characters stay exactly as they
+                       are. Use --list-ligatures to see the features the font
+                       actually exposes.
+  --list-ligatures [FONT_NAME]
+                       List the OpenType GSUB features of the selected font and
+                       exit. Use a tag from the list with --ligatures.
   --mono-emoji, --no-mono-emoji
-                        Render emoji as black ink (default) instead of color.
+                       Render emoji as black ink (default) instead of color.
+  --luma-lo NUMBER     Monochrome emoji cut: luminance below this value becomes
+                       solid black ink (default: 140).
+  --luma-hi NUMBER     Monochrome emoji cut: luminance above this value becomes
+                       transparent (default: 175). Values between LO and HI
+                       fade with antialiasing.
   --tab-width SPACES
                         Number of spaces a TAB character expands to (default: 8).
   --white-level NUMBER  Minimum pixel value to consider it "white" when cropping the

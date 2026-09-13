@@ -121,10 +121,23 @@ HELPS = {
         "Useful when printing a batch where \"cao\" should not come out "
         "larger than \"ciao\"."),
     "ligatures": (
-        "OpenType ligatures (--ligatures).\n"
-        "On: text runs are shaped with HarfBuzz so font ligatures are "
-        "applied (e.g. \"-->\" in Fira Code). Requires uharfbuzz to be "
-        "installed; without it the option has no effect."),
+        "OpenType GSUB feature (--ligatures FEATURE).\n"
+        "Pick a feature tag that the selected font actually exposes \""
+        "(use --list-ligatures on the command line to see them, e.g. \""
+        "calt for the arrows of Fira Code, liga for standard ligatures, \""
+        "dlig for discretionary ones). Text is shaped with HarfBuzz, but \""
+        "only the substituted (ligature) glyphs are drawn differently: all \""
+        "normal characters stay exactly as they are. Empty = off. \""
+        "Requires uharfbuzz."),
+    "luma_lo": (
+        "Monochrome emoji cut, low (--luma-lo).\n"
+        "Luminance below this value becomes solid black ink. "
+        "Default 140."),
+    "luma_hi": (
+        "Monochrome emoji cut, high (--luma-hi).\n"
+        "Luminance above this value becomes transparent (the white label "
+        "shows through). Values between LO and HI fade smoothly. "
+        "Default 175."),
     "tab_width": (
         "TAB width in spaces (--tab-width).\n"
         "TAB characters in the text are expanded to this many spaces "
@@ -513,8 +526,20 @@ class LabelGUI(tk.Tk):
               default=True, command=self._on_mono_toggled)
         check(g, "Uniform font sizing (--uniform-font)",
               "uniform_font")
-        check(g, "OpenType ligatures (--ligatures)",
-              "ligatures")
+        # OpenType GSUB feature selector: the values are filled from the
+        # selected font's GSUB table (see _refresh_ligature_combo).
+        self.vars.setdefault("ligatures", tk.StringVar(value=""))
+        lg = ttk.Frame(g)
+        lg.grid(row=g.grid_size()[1], column=0, columnspan=3, sticky="ew",
+                pady=1)
+        ttk.Label(lg, text="Ligature feature:", width=17).pack(side="left")
+        self.ligature_combo = ttk.Combobox(
+            lg, textvariable=self.vars["ligatures"], state="readonly",
+            width=22, values=[""])
+        self.ligature_combo.pack(side="left", fill="x", expand=True)
+        self.ligature_combo.bind("<<ComboboxSelected>>", _changed)
+        Tooltip(self.ligature_combo, HELPS["ligatures"])
+        self.after(80, self._refresh_ligature_combo)
         pair(g, "TAB width (spaces):", "tab_width", 8)
 
         # ---------------- Expert: text tuning ----------------
@@ -527,6 +552,8 @@ class LabelGUI(tk.Tk):
         pair(g, "Fixed width (mm, 0=off):", "fixed_width", 0)
         pair(g, "Tape width (mm, 12):", "tape_width", 12.0)
         pair(g, "Fixed font size (0=auto):", "fixed_font_size", 0)
+        pair(g, "Luma low (emoji B/W):", "luma_lo", 140.0)
+        pair(g, "Luma high (emoji B/W):", "luma_hi", 175.0)
         pair(g, "Fill color:", "fill", "black")
         pair(g, "Stroke fill:", "stroke_fill", "")
         pair(g, "Stroke width:", "stroke_width", 0)
@@ -879,6 +906,7 @@ class LabelGUI(tk.Tk):
         for lbl, path in getattr(self, "_system_fonts", []):
             if lbl == label:
                 self.vars["fontname"].set(path)
+                self._refresh_ligature_combo()
                 self._schedule_preview()
                 return
 
@@ -892,6 +920,7 @@ class LabelGUI(tk.Tk):
         """
         if not hasattr(self, "font_combo"):
             return
+        self._refresh_ligature_combo()
         current = os.path.basename(self.vars["fontname"].get() or "")
         for lbl, path in getattr(self, "_system_fonts", []):
             if os.path.basename(path).lower() == current.lower():
@@ -903,6 +932,26 @@ class LabelGUI(tk.Tk):
         try:
             self.font_combo.set("")
         except tk.TclError:
+            pass
+
+    def _refresh_ligature_combo(self):
+        """Fill the ligature-feature combo from the selected font's GSUB.
+
+        The OpenType GSUB table of the current font lists exactly the
+        features it can apply (liga, calt, dlig, …). Keep the selection
+        when the font is re-picked (features are font-specific).
+        """
+        try:
+            if not hasattr(self, "ligature_combo"):
+                return
+            from printlabel import _lig_features
+            feats = _lig_features(self.vars["fontname"].get() or "arial.ttf")
+            values = [""] + list(feats)
+            try:
+                self.ligature_combo["values"] = values
+            except tk.TclError:
+                return
+        except Exception:
             pass
 
     def _browse_fonts(self):
@@ -1232,8 +1281,10 @@ class LabelGUI(tk.Tk):
             tape_width=num("tape_width", float, 12.0),
             emoji_print_area=v["emoji_print_area"].get(),
             uniform_font=v["uniform_font"].get(),
-            ligatures=v["ligatures"].get(),
+            ligatures=v["ligatures"].get().strip() or None,
             mono_emoji=v["mono_emoji"].get(),
+            luma_lo=num("luma_lo", float, 140.0),
+            luma_hi=num("luma_hi", float, 175.0),
             tab_width=num("tab_width", int, 8),
             white_level=num("white_level", int, 240),
             threshold=num("threshold", int, 75),

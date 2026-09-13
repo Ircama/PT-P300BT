@@ -110,7 +110,7 @@ def emoji_thumbnail(ch, height, mono=True):
     return raster
 
 
-def _luminance_mono(raster):
+def _luminance_mono(raster, lo=140.0, hi=175.0):
     """In-place: convert an RGBA COLR emoji raster to black-ink shapes.
 
     Applies a luminance cut to the embedded-color render: dark pixels
@@ -119,15 +119,18 @@ def _luminance_mono(raster):
     face with an outline reads as a ring instead of a filled black blob.
     Used when --mono-emoji is OFF so the label preview still shows the
     COLR-derived shape in black and white (matching what actually prints)
-    instead of the full-color bitmap.
+    instead of the full-color bitmap. `lo`/`hi` are the configurable
+    luminance thresholds (defaults 140/175).
     """
     if raster is None or raster.mode != "RGBA":
         return
+    if lo > hi:
+        lo, hi = hi, lo
     pix = raster.load()
     w, h = raster.size
     # Sharp luminance cut: dark ink (outline/features) stays black;
     # light fills (yellow face, whites) go transparent.
-    LO, HI = 140.0, 175.0
+    LO, HI = float(lo), float(hi)
     for y in range(h):
         for x in range(w):
             r, g, b, a = pix[x, y]
@@ -225,6 +228,9 @@ class _MixedFont:
         # 1-bit thermal print actually looks like); False keeps the
         # embedded colors for screen-only rendering.
         self._mono = mono
+        # Configurable luminance thresholds for the B/W derivation
+        # (--luma-lo / --luma-hi).
+        self._luma_lo, self._luma_hi = _LUMA_GLOBAL
         # Primary font cmap (cached per path): which chars need the emoji.
         self._primary_cmap = None
         primary_path = getattr(self.font, "path", None) or primary
@@ -309,7 +315,7 @@ class _MixedFont:
         if raster is not None and not self._mono:
             # mono-emoji unchecked: derive black & white from the COLR
             # render via a luminance cut (outline stays, fill clears).
-            _luminance_mono(raster)
+            _luminance_mono(raster, lo=self._luma_lo, hi=self._luma_hi)
         self._emoji_raster_cache[key] = (raster, w)
         return raster, w
 
@@ -428,142 +434,198 @@ def _load_text_font(primary, size, emoji_mode="line", uniform=False,
                       uniform=uniform, mono=mono, ligatures=ligatures)
 
 
-# Global ligature flag set by build_label(); avoids threading an argument
-# through every _load_text_font() call while keeping the option module-wide.
-_LIGATURES_GLOBAL = False
+# Global GSUB feature tag (e.g. "calt") set by build_label(); avoids
+# threading an argument through every _load_text_font() call while keeping
+# the option module-wide. An empty string disables the feature.
+_LIGATURES_GLOBAL = ""
+
+# Global luminance thresholds (--luma-lo / --luma-hi) for the B/W emoji
+# derivation, set by build_label() like the ligature feature tag.
+_LUMA_GLOBAL = (140.0, 175.0)
 
 
 # ---------------------------------------------------------------------------
-# Ligature support (--ligatures)
+# Ligature support (--ligatures FEATURE)
 # ---------------------------------------------------------------------------
-# uharfbuzz is optional: when present, text runs are shaped with HarfBuzz so
-# OpenType ligatures (e.g. "-->" in Fira Code) are applied, then each glyph
-# is rendered directly from the font outline. Without uharfbuzz the option
-# is silently ignored and the classic text rendering is used.
-_LIG_CACHE = {}  # (font_path, size, text) -> shape plan
+# The classic PIL/FreeType path does not apply OpenType GSUB substitutions
+# (no libraqm), so a text like "-->" in Fira Code prints as three separate
+# characters. When uharfbuzz is available, --ligatures FEATURE lets the
+# user enable a GSUB feature of the selected font (e.g. --ligatures calt,
+# --ligatures liga, --ligatures dlig): the text is shaped with HarfBuzz
+# and every place where the FEATURE really substitutes glyphs is replaced
+# by a Private-Use-Area code point that maps to the substituted glyph in
+# an in-memory copy of the font, so FreeType rasterizes the ligature with
+# the exact same rendering as normal characters. All other characters are
+# drawn by the normal Pillow path - unchanged.
+_LIG_CACHE = {}  # (font_path, size) -> PUA-extended ImageFont
+_LIG_TT_CACHE = {}  # font_path -> TTFont (cached)
 
 
-def _lig_shape(font_path, size, text):
-    """Shape `text` with HarfBuzz -> (upem, [(glyph_id, x_advance)]).
+def _lig_features(font_path):
+    """List the GSUB feature tags of the font (sorted), or [] on error."""
+    try:
+        from fontTools.ttLib import TTFont
+        tt = _LIG_TT_CACHE.get(font_path)
+        if tt is None:
+            tt = TTFont(font_path, lazy=True)
+            _LIG_TT_CACHE[font_path] = tt
+        gsub = tt.get("GSUB")
+        if gsub is None or not getattr(gsub, "table", None):
+            return []
+        feats = set()
+        for rec in gsub.table.FeatureList.FeatureRecord:
+            feats.add(rec.FeatureTag)
+        return sorted(feats)
+    except Exception:
+        return []
 
-    Returns None when uharfbuzz is unavailable (or shaping fails), which
-    makes the caller fall back to plain Pillow text rendering.
-    """
-    key = (font_path, size, text)
+
+def _lig_ext_cmap(font_path):
+    """Extended cmap {cp -> glyph_name} for the PUA font (cached)."""
+    try:
+        from fontTools.ttLib import TTFont
+        tt = _LIG_TT_CACHE.get(font_path)
+        if tt is None:
+            tt = TTFont(font_path, lazy=False)
+            _LIG_TT_CACHE[font_path] = tt
+        ext = dict(tt.getBestCmap() or {})
+        order = tt.getGlyphOrder()
+        existing = set(ext.values())
+        pua = 0xE000
+        for gname in order:
+            if gname in existing:
+                continue
+            while pua in ext:
+                pua += 1
+            ext[pua] = gname
+            pua += 1
+        return ext
+    except Exception:
+        return {}
+
+
+def _lig_pua_font(font_path, size):
+    """PUA-extended ImageFont (cached). Returns None on error."""
+    key = (font_path, size)
     if key in _LIG_CACHE:
         return _LIG_CACHE[key]
-    plan = None
+    entry = None
+    try:
+        from fontTools.ttLib.tables._c_m_a_p import CmapSubtable
+        ext = _lig_ext_cmap(font_path)
+        if not ext:
+            entry = None
+        else:
+            import io
+            from fontTools.ttLib import TTFont
+            tt = _LIG_TT_CACHE.get(font_path)
+            if tt is None:
+                tt = TTFont(font_path, lazy=False)
+                _LIG_TT_CACHE[font_path] = tt
+            st = CmapSubtable.newSubtable(12)
+            st.platformID, st.platEncID, st.language = 3, 10, 0
+            st.cmap = ext
+            tt["cmap"].tables = [st]
+            bio = io.BytesIO()
+            tt.save(bio)  # one-off per (path, size): slow but fine
+            bio.seek(0)
+            entry = ImageFont.truetype(bio, size, encoding="utf-8")
+    except Exception:
+        entry = None
+    _LIG_CACHE[key] = entry
+    return entry
+
+
+def _lig_shape(font_path, text, feature):
+    """Shape `text` with the feature ON -> [(gid, cluster)] or None."""
     try:
         import uharfbuzz as hb
         blob = hb.Blob.from_file_path(font_path)
         face = hb.Face(blob)
         font = hb.Font(face)
-        upem = face.upem
         buf = hb.Buffer()
         buf.add_str(text)
         buf.guess_segment_properties()
-        hb.shape(font, buf)
-        plan = (upem, [(info.codepoint, pos.x_advance)
-                       for info, pos in zip(buf.glyph_infos,
-                                            buf.glyph_positions)])
+        hb.shape(font, buf, {feature: True})
+        return [(i.codepoint, i.cluster) for i in buf.glyph_infos]
     except Exception:
-        plan = None
-    _LIG_CACHE[key] = plan
-    return plan
+        return None
 
 
-def _lig_draw_glyph(draw, glyph_id, xy, font_path, size_px, fill):
-    """Render glyph `glyph_id` from the TTF outline at the given position.
+def _lig_substitute(text, font_path, feature):
+    """Return `text` with ligature glyphs mapped to PUA code points.
 
-    xy is the baseline origin. The glyph silhouette is drawn with the
-    same raster black fill as normal text. Silently skips glyphs that
-    cannot be rendered (composite or missing).
+    Characters whose glyph is unchanged by the feature stay exactly as
+    they are; only the substituted (ligature) runs get PUA chars, which
+    the PUA-extended font renders with the substituted glyph. The
+    comparison is against the glyph FreeType would render naively (the
+    nominal glyph per code point), so every substitution the font makes
+    with the feature enabled (e.g. "calt" arrows in Fira Code) is caught,
+    even if HarfBuzz applies it by default. `feature` may be a single tag
+    or a comma-separated list ("calt,liga"); each tag is applied in turn.
+    Returns the text unchanged if shaping is not available or the feature
+    is not in the font.
     """
-    try:
-        from fontTools.ttLib import TTFont
-        from fontTools.pens.recordingPen import RecordingPen
-
-        ttfont = _LIG_CACHE.get(("_ttfont", font_path))
-        if ttfont is None:
-            # lazy=False so the glyf contours are actually loaded.
-            ttfont = TTFont(font_path, fontNumber=0, lazy=False)
-            _LIG_CACHE[("_ttfont", font_path)] = ttfont
-        glyf = ttfont["glyf"]
-        gname = ttfont.getGlyphOrder()[glyph_id] if \
-            glyph_id < len(ttfont.getGlyphOrder()) else None
-        if gname is None or gname not in glyf:
-            return
-        glyph = glyf[gname]
-        if glyph.isComposite():
-            return  # composite glyphs are too complex to rasterize here
-
-        upem = ttfont["head"].unitsPerEm
-        sx = size_px / upem
-        x0, y0 = xy
-
-        rpen = RecordingPen()
-        glyph.draw(rpen, glyf)
-        commands = rpen.value
-
-        def _bez(p0, p1, p2, p3, n=12):
-            pts = []
-            for t in range(n + 1):
-                t /= n
-                mt = 1 - t
-                pts.append((
-                    mt**3 * p0[0] + 3 * mt**2 * t * p1[0] +
-                    3 * mt * t**2 * p2[0] + t**3 * p3[0],
-                    mt**3 * p0[1] + 3 * mt**2 * t * p1[1] +
-                    3 * mt * t**2 * p2[1] + t**3 * p3[1],
-                ))
-            return pts
-
-        def _qbez(p0, p1, p2, n=12):
-            pts = []
-            for t in range(n + 1):
-                t /= n
-                mt = 1 - t
-                pts.append((
-                    mt**2 * p0[0] + 2 * mt * t * p1[0] + t**2 * p2[0],
-                    mt**2 * p0[1] + 2 * mt * t * p1[1] + t**2 * p2[1],
-                ))
-            return pts
-
-        def _scale(p):
-            # TT outlines grow y upward; screen coordinates grow y
-            # downward, so negate the y component around the baseline.
-            return (x0 + p[0] * sx, y0 - p[1] * sx)
-
-        polygons = []
-        cur = []
-        for op, args in commands:
-            if op == "moveTo":
-                if cur:
-                    polygons.append(cur)
-                cur = [_scale(args[0])]
-            elif op == "lineTo":
-                cur.append(_scale(args[0]))
-            elif op == "curveTo":
-                p0 = _scale(cur[-1])
-                p1, p2, p3 = (_scale(args[0]), _scale(args[1]),
-                               _scale(args[2]))
-                cur.extend(_bez(p0, p1, p2, p3))
-            elif op == "qCurveTo":
-                p0 = _scale(cur[-1])
-                p1, p2 = _scale(args[0]), _scale(args[1])
-                cur.extend(_qbez(p0, p1, p2))
-            elif op == "closePath":
-                if cur:
-                    polygons.append(cur)
-                cur = []
-        if cur:
-            polygons.append(cur)
-
-        for poly in polygons:
-            if len(poly) >= 3:
-                draw.polygon(poly, fill=fill)
-    except Exception:
-        pass
+    if not text or not feature:
+        return text
+    result = text
+    for tag in [t.strip() for t in feature.split(",") if t.strip()]:
+        if tag not in _lig_features(font_path):
+            continue  # unknown feature for this font: never alter text
+        shaped = _lig_shape(font_path, result, tag)
+        if not shaped:
+            continue
+        ext = _lig_ext_cmap(font_path)
+        if not ext:
+            continue
+        # reverse mapping glyph name -> pua (unique in ext)
+        name_to_pua = {}
+        for cp, nm in ext.items():
+            name_to_pua.setdefault(nm, chr(cp))
+        try:
+            import uharfbuzz as hb
+            blob = hb.Blob.from_file_path(font_path)
+            face = hb.Face(blob)
+            hbfont = hb.Font(face)
+        except Exception:
+            continue
+        out = list(result)
+        for idx, (gid, cl) in enumerate(shaped):
+            if cl >= len(result):
+                continue
+            # what FreeType would draw for this character
+            nominal = None
+            try:
+                nominal = hbfont.get_nominal_glyph(ord(result[cl]))
+            except Exception:
+                nominal = None
+            if nominal == gid:
+                continue  # normal character: unchanged
+            # substituted glyph: find how many chars it covers (up to the
+            # next cluster), map its name to the PUA and replace the range.
+            nxt = len(result)
+            for _g2, c2 in shaped[idx + 1:]:
+                if c2 != cl:
+                    nxt = c2
+                    break
+            gname = None
+            try:
+                tt = _LIG_TT_CACHE.get(font_path)
+                if tt is None:
+                    from fontTools.ttLib import TTFont
+                    tt = TTFont(font_path, lazy=False)
+                    _LIG_TT_CACHE[font_path] = tt
+                order = tt.getGlyphOrder()
+                gname = order[gid] if gid < len(order) else None
+            except Exception:
+                gname = None
+            pua = name_to_pua.get(gname)
+            if pua:
+                lo = max(0, cl)
+                hi = min(nxt, len(result))
+                out[lo:hi] = [pua] + [""] * (hi - lo - 1)
+        result = "".join(out)
+    return result
 
 
 def _draw_text_mixed(draw, xy, text, font, fill=None, anchor=None,
@@ -621,26 +683,26 @@ def _draw_text_mixed(draw, xy, text, font, fill=None, anchor=None,
         else:
             if "\n" not in chunk:
                 if getattr(font, "_ligatures", False):
-                    # OpenType ligature shaping (--ligatures): shape the
-                    # run with HarfBuzz and draw each resulting glyph, so
-                    # ligatures produced by the font (e.g. "-->" in Fira
-                    # Code) are actually applied.
-                    shaped = _lig_shape(font._path, font.size, chunk)
-                    if shaped is not None:
-                        upem, plan = shaped
-                        pen_x = x0
-                        for glyph_id, x_adv in plan:
-                            _lig_draw_glyph(
-                                draw, glyph_id, (pen_x, baseline),
-                                font._path, font.size, fill)
-                            pen_x += x_adv * font.size / upem
-                        x0 += sum(a for _g, a in plan) * font.size / upem
-                    else:
-                        draw.text((x0, baseline), chunk, font=font_used,
-                                  fill=fill, anchor="ls",
-                                  stroke_width=stroke_width,
-                                  stroke_fill=stroke_fill)
-                        x0 += font_used.getlength(chunk)
+                    # OpenType feature shaping (--ligatures FEATURE): only
+                    # the substituted (ligature) glyphs change, all normal
+                    # chars stay drawn by the normal Pillow path.
+                    ssub = _lig_substitute(
+                        chunk, font._path, font._ligatures)
+                    if ssub and ssub != chunk:
+                        pua_font = _lig_pua_font(font._path, font.size)
+                        if pua_font is not None:
+                            draw.text((x0, baseline), ssub,
+                                      font=pua_font, fill=fill,
+                                      anchor="ls",
+                                      stroke_width=stroke_width,
+                                      stroke_fill=stroke_fill)
+                            x0 += pua_font.getlength(ssub)
+                            continue
+                    draw.text((x0, baseline), chunk, font=font_used,
+                              fill=fill, anchor="ls",
+                              stroke_width=stroke_width,
+                              stroke_fill=stroke_fill)
+                    x0 += font_used.getlength(chunk)
                 else:
                     draw.text((x0, baseline), chunk, font=font_used,
                               fill=fill, anchor="ls",
@@ -903,12 +965,44 @@ def set_args():
     )
     p.add_argument(
         '--ligatures',
-        help='Apply OpenType ligatures (e.g. "-->" in Fira Code) using'
-             ' HarfBuzz shaping via uharfbuzz. Requires uharfbuzz to be'
-             ' installed; without it the option is ignored and text is'
-             ' drawn identically to the default.',
-        action='store_true',
-        default=False,
+        help='Enable a GSUB feature of the selected font (requires '
+             'uharfbuzz). The feature name is the OpenType tag, e.g. '
+             '"calt" (contextual alternates, arrows in Fira Code), "liga" '
+             '(standard ligatures) or "dlig" (discretionary ligatures). '
+             'Repeat the option to enable several features. Text is '
+             'shaped with HarfBuzz but only the substituted (ligature) '
+             'glyphs are drawn differently; all normal characters stay '
+             'exactly as they are. Use --list-ligatures to see the '
+             'features the font actually exposes.',
+        metavar='FEATURE',
+        action='append',
+        default=None,
+    )
+    p.add_argument(
+        '--list-ligatures',
+        help='List the OpenType GSUB features of the selected font and '
+             'exit. Use a tag from the list with --ligatures.',
+        metavar='FONT_NAME',
+        nargs='?',
+        const='arial.ttf',
+        default=None,
+    )
+    p.add_argument(
+        '--luma-lo',
+        help='Monochrome emoji cut: luminance below this value becomes '
+             'solid black ink (default: 140).',
+        type=float,
+        metavar='NUMBER',
+        default=140.0,
+    )
+    p.add_argument(
+        '--luma-hi',
+        help='Monochrome emoji cut: luminance above this value becomes '
+             'transparent (default: 175). Values between LO and HI fade '
+             'with antialiasing.',
+        type=float,
+        metavar='NUMBER',
+        default=175.0,
     )
     p.add_argument(
         '--mono-emoji',
@@ -1084,6 +1178,25 @@ def main():
     if args.list_bt:
         _list_bt_devices()
         sys.exit(0)
+    if args.list_ligatures is not None:
+        # --list-ligatures [FONT_NAME]: print the GSUB features the font
+        # exposes, without needing a printer or a COM port.
+        font_path = args.list_ligatures
+        try:
+            from fontbrowser import find_font_path
+            font_path = find_font_path(font_path)
+        except Exception:
+            pass
+        feats = _lig_features(font_path)
+        if not feats:
+            print(f'No GSUB features found in "{font_path}" '
+                  f'(or the font has no GSUB table).')
+        else:
+            print(f'GSUB features of "{font_path}":')
+            print("  " + " ".join(feats))
+            print("Use a tag with --ligatures, e.g. "
+                  f'--ligatures {feats[0] if feats else "calt"}')
+        sys.exit(0)
     if not args.comport:
         p.error("COM_PORT is required (or use --list-bt to list Bluetooth devices).")
     if not args.comport.startswith("bt:") and \
@@ -1222,8 +1335,16 @@ def build_label(args):
 
     Raises _LabelError on invalid parameters (instead of exiting).
     """
-    global _LIGATURES_GLOBAL
-    _LIGATURES_GLOBAL = bool(getattr(args, "ligatures", False))
+    global _LIGATURES_GLOBAL, _LUMA_GLOBAL
+    # GSUB feature tag(s), e.g. "calt" or "calt,liga": comma-joined list.
+    lig = getattr(args, "ligatures", None) or []
+    if isinstance(lig, str):
+        lig = [lig]
+    _LIGATURES_GLOBAL = ",".join(f for f in lig if f).strip(",")
+    _LUMA_GLOBAL = (
+        float(getattr(args, "luma_lo", 140.0) or 140.0),
+        float(getattr(args, "luma_hi", 175.0) or 175.0),
+    )
     # Legacy -i/--image: print the given image as the whole label, ignoring text
     # and font. The image-building code below only ever ran in the non-legacy
     # branch, so -i used to leave `data` unset and crash; route it through the
