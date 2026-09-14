@@ -356,7 +356,15 @@ The web port mirrors `printlabel.py`:
 ```bash
 node web/test_printer.mjs   # protocol + print flow (40 tests)
 node web/test_label.mjs     # label algorithms (35 tests, needs `npm i canvas`)
+node web/test_web.mjs       # end-to-end GUI in Chrome + WebKit (45 tests)
 ```
+
+The browser test (`test_web.mjs`) drives the real page with Playwright: it
+checks the preview, every control, zoom, the converted-raster view,
+ligatures, emoji, multiline, uniform font, fixed width, save PNG, the print
+guard, image merge, the full print flow with a mocked serial port, and the
+"unsupported browser" banner (verified with WebKit, which has no Web Serial).
+It needs a local server (`npm run serve`) and `npx playwright install chrome webkit`.
 
 ## Code dependency structure
 

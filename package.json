@@ -5,12 +5,14 @@
   "description": "Browser port of the PT-P300BT label designer (Web Serial + Canvas 2D).",
   "type": "module",
   "scripts": {
-    "test": "node web/test_printer.mjs && node web/test_label.mjs",
+    "test": "node web/test_printer.mjs && node web/test_label.mjs && node web/test_web.mjs",
     "test:printer": "node web/test_printer.mjs",
     "test:label": "node web/test_label.mjs",
+    "test:web": "node web/test_web.mjs",
     "serve": "python -m http.server 8000 --directory web"
   },
   "devDependencies": {
-    "canvas": "^3.2.0"
+    "canvas": "^3.2.0",
+    "playwright": "^1.63.0"
   }
 }
