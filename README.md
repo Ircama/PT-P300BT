@@ -301,6 +301,63 @@ git clone https://github.com/Ircama/PT-P300BT && cd PT-P300BT
 pip install -r requirements.txt
 ```
 
+## Web application (browser port)
+
+A complete browser port of the program lives in the [`web/`](web/) folder.
+It re-implements the label algorithms and the GUI 1:1 in HTML/CSS/JavaScript
+and prints to the PT-P300BT directly from the browser over Bluetooth using
+the **Web Serial API** (Bluetooth Classic RFCOMM/SPP) — no OS serial port or
+Python installation required.
+
+### Running it
+
+Serve the folder over HTTP (Web Serial requires a secure context; `file://`
+works for the preview but not for the serial port):
+
+```bash
+cd web
+python -m http.server 8000
+# then open http://localhost:8000/ in Chrome or Edge
+```
+
+### Browser support
+
+| Browser | Preview & algorithms | Bluetooth printing |
+| --- | --- | --- |
+| Chrome / Edge (desktop, 117+) | ✅ | ✅ (Web Serial + RFCOMM/SPP) |
+| Chrome on Android | ✅ | ✅ |
+| Firefox | ✅ | ❌ (no Web Serial) |
+| Safari (macOS/iOS) | ✅ | ❌ (no Web Serial) |
+
+When the browser does not expose the Web Serial API, the page shows an
+informative banner explaining that printing is unavailable and which
+browsers to use; the preview and every label algorithm keep working.
+
+### Feature parity
+
+The web port mirrors `printlabel.py`:
+
+- **Algorithms** (`web/label.js`): auto-fit font sizing, multiline layout,
+  uniform font sizing, emoji raster overlay (in-line and print-area band),
+  luminance-based black & white emoji, image merge/crop/resize, fixed width,
+  text stretching, rulers, and the rotate/invert/mirror/threshold/128-px-pad
+  rasterization.
+- **OpenType features** (`--ligatures`): applied through SVG
+  `font-feature-settings`, which Chrome/Edge shape with HarfBuzz — the same
+  engine `uharfbuzz` wraps in the Python version.
+- **Protocol** (`web/printer.js`): the PTCBP command set, PackBits RLE
+  compression, status-register parsing and the full print job flow.
+- **GUI** (`web/index.html`, `web/app.js`): every control of the Tkinter GUI
+  (text, font, ligatures, TAB width, advanced tuning, images/merge, printer
+  options, preview zoom/pan, converted-raster view, save PNG, print).
+
+### Tests
+
+```bash
+node web/test_printer.mjs   # protocol + print flow (40 tests)
+node web/test_label.mjs     # label algorithms (35 tests, needs `npm i canvas`)
+```
+
 ## Code dependency structure
 
 ```mermaid

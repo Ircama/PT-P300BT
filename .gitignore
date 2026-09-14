@@ -164,3 +164,7 @@ cython_debug/
 devices.xml
 *.png
 *.jpg
+
+# Node.js (web port test dependency)
+node_modules/
+package-lock.json
