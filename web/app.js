@@ -33,11 +33,11 @@ function checkSupport() {
   const bannerText = $('support-banner-text');
   const supported = window.PTPrinter.SerialTransport.isSupported();
   if (supported) {
-    badge.textContent = 'Web Serial available (Chrome/Edge)';
+    badge.textContent = 'Web Serial available';
     badge.className = 'badge badge-ok';
     badge.title = 'This browser exposes the Web Serial API, which can open '
-      + 'Bluetooth RFCOMM/SPP devices (Chrome/Edge 117+, desktop). Firefox '
-      + 'and Safari do not support it.';
+      + 'Bluetooth RFCOMM/SPP devices (Chrome/Edge 117+, desktop; also '
+      + 'available in some other Chromium-based browsers).';
     banner.classList.add('hidden');
   } else {
     badge.textContent = 'Web Serial unavailable';
@@ -295,8 +295,18 @@ async function connectPrinter() {
     $('connect-btn').textContent = 'Disconnect';
     log('=> Printer connected.');
   } catch (e) {
-    log(`Connection failed: ${e.message}`);
-    setStatus(`Connection failed: ${e.message}`);
+    let msg = e.message || String(e);
+    if (/user gesture/i.test(msg)) {
+      msg = 'The browser blocked the serial-permission prompt (it must be '
+        + 'opened directly by a click). Reload the page and click '
+        + '"Connect printer" again.';
+    } else if (/secure context|insecure/i.test(msg)
+               || window.location.protocol === 'file:') {
+      msg = 'Web Serial needs a secure context: serve this page over '
+        + 'http://localhost (see web/README.md) instead of ' + window.location.protocol + '//.';
+    }
+    log(`Connection failed: ${msg}`);
+    setStatus(`Connection failed: ${msg}`);
   }
 }
 

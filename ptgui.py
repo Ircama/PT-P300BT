@@ -506,6 +506,12 @@ class LabelGUI(tk.Tk):
         tsb.grid(row=0, column=1, sticky="ns")
         self.text_box.bind("<<Modified>>", self._on_text_modified)
         self.text_box.insert("1.0", "")
+        # Include the emoji images in Ctrl+C / copy: without this, Tk's
+        # default copy only takes the text between the marks and the
+        # zero-width emoji placeholders are dropped ("ciao" instead of
+        # "ciao🙂").
+        self.text_box.bind("<Control-c>", self._copy_with_emoji)
+        self.text_box.bind("<Control-X>", self._copy_with_emoji)
         Tooltip(self.text_box, HELPS["text"])
         entry(g, "Font file:", "fontname", self._default_font(), browse=True,
               filetypes=(("Font files", "*.ttf *.otf *.ttc"), ("All", "*.*")))
@@ -945,7 +951,19 @@ class LabelGUI(tk.Tk):
             if not hasattr(self, "ligature_combo"):
                 return
             from printlabel import _lig_features
-            feats = _lig_features(self.vars["fontname"].get() or "arial.ttf")
+            font_ref = self.vars["fontname"].get() or "arial.ttf"
+            # The font reference may be a bare file name ("arial.ttf"), not
+            # a path: resolve it through the system font list like the
+            # preview does, otherwise _lig_features() silently returns []
+            # (no such file in the working directory) and the combo stays
+            # empty even for fonts full of features such as Arial.
+            if not os.path.isfile(font_ref):
+                try:
+                    from fontbrowser import find_font_path
+                    font_ref = find_font_path(font_ref) or font_ref
+                except Exception:
+                    pass
+            feats = _lig_features(font_ref)
             values = [""] + list(feats)
             try:
                 self.ligature_combo["values"] = values
@@ -1098,6 +1116,35 @@ class LabelGUI(tk.Tk):
             else:
                 out.append(ch)
         return "".join(out)
+
+    def _copy_with_emoji(self, event=None):
+        """Ctrl+C handler that puts the REAL text (emoji included) on the
+        clipboard.
+
+        Tk's built-in copy only transfers the selected *characters*, and
+        the emoji are zero-width placeholders plus inline images, so a
+        plain copy yields "ciao" instead of "ciao🙂". This replaces the
+        placeholder positions with the emoji characters from
+        _emoji_sequence before copying.
+        """
+        try:
+            raw = self.text_box.get("sel.first", "sel.last")
+        except tk.TclError:
+            return None  # no selection: let Tk handle it (nothing to copy)
+        text = raw
+        if "\ufeff" in raw:
+            seq = list(self._emoji_sequence)
+            out = []
+            for ch in raw:
+                if ch == "\ufeff":
+                    out.append(seq.pop(0) if seq else "")
+                else:
+                    out.append(ch)
+            text = "".join(out)
+        self.clipboard_clear()
+        self.clipboard_append(text)
+        self.update()  # keep the clipboard content after the app loses focus
+        return "break"  # stop the default Tk copy handler
 
     # Emoji chars get replaced by a zero-width placeholder in the widget;
     # the color raster is attached via image_create. This keeps typing

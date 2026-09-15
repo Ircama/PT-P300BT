@@ -56,7 +56,7 @@ async function setText(t) {
 console.log('page load');
 ok(await page.title() !== '', 'page has a title');
 eq(await page.isVisible('#support-badge'), true, 'support badge visible');
-eq(await page.textContent('#support-badge'), 'Web Serial available (Chrome/Edge)', 'Web Serial detected in Chrome');
+eq(await page.textContent('#support-badge'), 'Web Serial available', 'Web Serial detected in Chrome');
 eq(await page.isHidden('#support-banner'), true, 'support banner hidden when supported');
 eq(await page.$('#preview-canvas') !== null, true, 'preview canvas present');
 
@@ -68,7 +68,16 @@ console.log('font list');
   ok(fonts.includes('Arial'), 'Arial present');
   ok(fonts.includes('DejaVu Sans Mono'), 'DejaVu Sans Mono present');
 }
-
+// --- Dynamic ligature list ----------------------------------------------
+console.log('dynamic ligature list');
+{
+  const opts = await page.$$eval('#ligatures option', (o) => o.map((x) => x.value));
+  ok(opts[0] === '', 'ligature list starts with (off)');
+  ok(opts.includes('ss02'), 'Arial offers ss02 (dynamic probe)');
+  ok(!opts.includes('liga'), 'liga not listed (no visible effect on the probe)');
+  const hint = await page.textContent('#ligature-status');
+  ok(/feature/.test(hint), `ligature status hint populated ("${hint}")`);
+}
 // --- 3. Basic preview ------------------------------------------------------
 console.log('basic preview');
 await setText('Hello');

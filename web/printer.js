@@ -372,7 +372,11 @@ class SerialTransport {
   }
 
   static isSupported() {
-    return typeof navigator !== 'undefined' && 'serial' in navigator;
+    if (typeof navigator === 'undefined' || !('serial' in navigator)) return false;
+    // Firefox exposes navigator.serial but requestPort() is not implemented
+    // (the API surface exists while the chooser never opens), so require the
+    // method to be callable too — Chrome/Edge always provide it.
+    return typeof navigator.serial.requestPort === 'function';
   }
 
   static async requestPort() {

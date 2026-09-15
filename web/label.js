@@ -109,7 +109,8 @@ function svgMeasure(text, family, size, feature) {
   return svgMeasureRaw(text, family, size, feature);
 }
 
-// Common GSUB feature tags probed to build the dynamic --ligatures list.
+// Common GSUB feature tags probed to build the dynamic --ligatures list
+// (same family of tags printlabel._lig_features() finds in real fonts).
 const LIGATURE_PROBE_TAGS = [
   'liga', 'dlig', 'clig', 'calt', 'rlig', 'kern', 'ccmp', 'unic', 'hist',
   'smcp', 'c2sc', 'pcap', 'c2pc', 'onum', 'pnum', 'tnum', 'lnum', 'frac',
@@ -121,8 +122,12 @@ const LIGATURE_PROBE_TAGS = [
 ];
 
 // Dynamic --ligatures list (port of ptgui._refresh_ligature_combo): a tag is
-// offered when enabling it actually changes the shaped rendering of a probe
-// sample, i.e. the selected font exposes and applies it.
+// listed when the font applies it. The probe measures the sample with ONLY
+// that feature enabled (all the default-on features like liga/calt are
+// explicitly disabled via font-feature-settings 'x' 0), so the difference
+// against the untouched sample isolates the tag's own effect. This avoids
+// listing tags that exist in the GSUB table but change nothing for the
+// sample, while still catching every tag that visibly alters the text.
 function probeLigatureFeatures(family, size = 40) {
   if (!_svgAvailable()) return [];
   const sample = 'AVTaw fi ffi fl 0123 --> <= abcdefghij ABCXYZ';
@@ -236,7 +241,11 @@ class WebFont {
     return ctx.measureText(text).width;
   }
 
-  // Ink bounding box. anchor "lt" -> top-left of ink; "ls" -> baseline-left.
+  // Bounding box, mirroring Pillow's anchor semantics exactly.
+  // Verified against Pillow: with anchor "lt"/"ls" the x2 coordinate is the
+  // PEN ADVANCE (e.g. 'ciao'@87 -> (0,0,159,64) with getlength 159.0;
+  // 'W.,'@87 -> x2 130 with getlength 129.9), not the ink extent. Using the
+  // advance keeps the right padding identical to the Python app.
   getbbox(text, opts = {}) {
     const anchor = opts.anchor || null;
     if (!text) return [0, 0, 0, 0];
@@ -245,16 +254,16 @@ class WebFont {
     const ascent = m.actualBoundingBoxAscent || 0;
     const descent = m.actualBoundingBoxDescent || 0;
     const left = m.actualBoundingBoxLeft || 0;
-    const right = m.actualBoundingBoxRight || 0;
+    const adv = m.width;
     if (anchor === 'lt') {
-      // Top of the ink at y=0: width = ink width, height = ink height.
-      return [0, 0, left + right, ascent + descent];
+      // Top of the ink at y=0; width = pen advance (Pillow semantics).
+      return [0, 0, adv, ascent + descent];
     }
     if (anchor === 'ls') {
-      // Baseline-left: top is negative ascent.
-      return [left, -ascent, right, descent];
+      // Baseline-left: top is negative ascent; x2 = advance, y2 = descent.
+      return [left, -ascent, adv, descent];
     }
-    return [left, -ascent, right, descent];
+    return [left, -ascent, adv, descent];
   }
 
   // Font metrics (ascent, descent) — approximated from a tall sample.
@@ -321,6 +330,11 @@ function inkBBox(ctx, w, h) {
 }
 
 // _luminance_mono — in-place B/W derivation from a colour emoji raster.
+// Mirrors printlabel._luminance_mono: dark pixels become solid ink, light
+// pixels become transparent, and ONLY the mid-luminance antialias ramp keeps
+// partial alpha. Pixels outside the emoji shapes (very faint background
+// residue with alpha close to 0) are dropped, so the result never shows a
+// translucent gray veil on a printer that only has 1-bit dots.
 function luminanceMono(canvas, lo = 140.0, hi = 175.0) {
   if (lo > hi) [lo, hi] = [hi, lo];
   const ctx = canvas.getContext('2d');
@@ -332,12 +346,19 @@ function luminanceMono(canvas, lo = 140.0, hi = 175.0) {
     if (!a) continue;
     const lum = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
     if (lum <= lo) {
-      d[i] = 0; d[i + 1] = 0; d[i + 2] = 0; // solid ink
+      d[i] = 0; d[i + 1] = 0; d[i + 2] = 0; // solid ink (alpha kept)
     } else if (lum >= hi) {
-      d[i + 3] = 0; // clear
+      d[i + 3] = 0; // clear (white label)
     } else {
-      d[i] = 0; d[i + 1] = 0; d[i + 2] = 0;
-      d[i + 3] = Math.round(a * (hi - lum) / (hi - lo));
+      const keep = Math.round(a * (hi - lum) / (hi - lo));
+      // Faint antialias residue (keep < 48) would print as a smudge of
+      // nearly-invisible dots: drop it like the Python pipeline, whose
+      // rasterization step discards pixels below the threshold.
+      if (keep < 48) d[i + 3] = 0;
+      else {
+        d[i] = 0; d[i + 1] = 0; d[i + 2] = 0;
+        d[i + 3] = keep;
+      }
     }
   }
   ctx.putImageData(img, 0, 0);
