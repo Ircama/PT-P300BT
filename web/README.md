@@ -45,15 +45,17 @@ npm run serve
 | --- | --- | --- |
 | Chrome / Edge (desktop, 117+) | ✅ | ✅ (Web Serial + RFCOMM/SPP) |
 | Chrome on Android | ✅ | ✅ |
-| Firefox | ✅ | ❌ (no Web Serial) |
+| Firefox 155+ (desktop) | ✅ | ⚠️ (Web Serial present; RFCOMM/SPP support may vary — Chrome/Edge recommended) |
+| Older Firefox | ✅ | ❌ (no Web Serial) |
 | Safari (macOS/iOS) | ✅ | ❌ (no Web Serial) |
 
 The **"Web Serial available"** badge means the browser exposes the Web
-Serial API. The fully supported browsers for Bluetooth RFCOMM/SPP printing
-are **Chrome and Edge (desktop, 117+)**; other Chromium derivatives may work.
-Firefox has no Web Serial API and Safari none either: they show the red
-"unavailable" badge plus an informative banner — printing is disabled there,
-but the preview and every label algorithm keep working.
+Serial API with a working `requestPort()` (checked at runtime: Firefox
+before v155 has no `navigator.serial` at all). Chrome and Edge are the
+fully supported browsers for Bluetooth RFCOMM/SPP printing. On browsers
+without Web Serial (older Firefox, Safari) the page shows the red
+"unavailable" badge plus an informative banner — printing is disabled
+there, but the preview and every label algorithm keep working.
 
 When you press **Connect printer**, the browser shows its own permission
 prompt ("… wants to connect to a serial port") listing the paired Bluetooth

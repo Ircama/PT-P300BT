@@ -379,6 +379,12 @@ class _MixedFont:
             # Only emoji: measure the em-box slot ("Ag") so the fit still
             # converges on the printable-area height.
             clean = "Ag"
+        # --ligatures: the glyphs are drawn with the PUA font whose advance
+        # can be wider than the plain font's (Arial 'ciao'+'unic': 218 vs
+        # 159): size the box on the shaped advance or the tail is clipped.
+        shaped_x2 = self._shaped_length(self.font, clean) \
+            if getattr(self, "_ligatures", False) and "\n" not in clean \
+            else None
         if self._uniform and clean.strip():
             # Uniform mode: the HEIGHT comes from the standard sample
             # ("Ag") so all texts with the same line count fit the same;
@@ -393,6 +399,8 @@ class _MixedFont:
                 clean, mode=mode, direction=direction, features=features,
                 language=language, stroke_width=stroke_width, anchor=anchor,
                 *args, **kwargs)
+            if shaped_x2 is not None:
+                w_bbox = (w_bbox[0], w_bbox[1], int(round(shaped_x2)), w_bbox[3])
             if has_emoji_target and any(self.is_emoji(ch) for ch in text) \
                     and not self._emoji_band:
                 # Inline (line mode) with emoji: the width must also
@@ -411,6 +419,8 @@ class _MixedFont:
             clean, mode=mode, direction=direction, features=features,
             language=language, stroke_width=stroke_width, anchor=anchor,
             *args, **kwargs)
+        if shaped_x2 is not None:
+            b = (b[0], b[1], int(round(shaped_x2)), b[3])
         if has_emoji_target and any(self.is_emoji(ch) for ch in text) \
                 and not self._emoji_band:
             # Inline (line mode) with emoji: width = pen advance of the
@@ -428,8 +438,31 @@ class _MixedFont:
                 for ch in chunk:
                     total += self._emoji_width(ch)
             else:
-                total += font.getlength(chunk)
+                total += self._shaped_length(font, chunk)
         return total
+
+    def _shaped_length(self, font, chunk):
+        """Pen advance of `chunk`, honouring --ligatures.
+
+        With an OpenType feature active, _draw_text_mixed() draws the
+        substituted text with the PUA-extended font and advances the pen by
+        pua_font.getlength(ssub). Measurement must use the SAME advance or
+        the label image is sized for the unshaped text and the tail of the
+        shaped text is clipped (e.g. Arial 'ciao' + 'unic': primary advance
+        159 vs PUA advance 218 -> the last letter falls outside the image).
+        Falls back to the plain font advance when shaping is unavailable or
+        the feature does not alter the chunk.
+        """
+        if getattr(self, "_ligatures", False) and "\n" not in chunk:
+            try:
+                ssub = _lig_substitute(chunk, self._path, self._ligatures)
+                if ssub and ssub != chunk:
+                    pua_font = _lig_pua_font(self._path, self.size)
+                    if pua_font is not None:
+                        return pua_font.getlength(ssub)
+            except Exception:
+                pass
+        return font.getlength(chunk)
 
     def getmetrics(self):
         return self.font.getmetrics()

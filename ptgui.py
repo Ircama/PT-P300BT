@@ -509,9 +509,9 @@ class LabelGUI(tk.Tk):
         # Include the emoji images in Ctrl+C / copy: without this, Tk's
         # default copy only takes the text between the marks and the
         # zero-width emoji placeholders are dropped ("ciao" instead of
-        # "ciao🙂").
+        # "ciao🙂"). Ctrl+X does the same and then removes the selection.
         self.text_box.bind("<Control-c>", self._copy_with_emoji)
-        self.text_box.bind("<Control-X>", self._copy_with_emoji)
+        self.text_box.bind("<Control-X>", self._cut_with_emoji)
         Tooltip(self.text_box, HELPS["text"])
         entry(g, "Font file:", "fontname", self._default_font(), browse=True,
               filetypes=(("Font files", "*.ttf *.otf *.ttc"), ("All", "*.*")))
@@ -1145,6 +1145,21 @@ class LabelGUI(tk.Tk):
         self.clipboard_append(text)
         self.update()  # keep the clipboard content after the app loses focus
         return "break"  # stop the default Tk copy handler
+
+    def _cut_with_emoji(self, event=None):
+        """Ctrl+X handler: copy the real text (emoji included) like
+        _copy_with_emoji, then delete the selection from the widget.
+
+        Tk's default cut has the same placeholder problem as the copy, so
+        it is replaced entirely instead of chained after it.
+        """
+        if self._copy_with_emoji(event) is None:
+            return None  # no selection: nothing to cut
+        try:
+            self.text_box.delete("sel.first", "sel.last")
+        except tk.TclError:
+            pass
+        return "break"
 
     # Emoji chars get replaced by a zero-width placeholder in the widget;
     # the color raster is attached via image_create. This keeps typing

@@ -35,9 +35,13 @@ function checkSupport() {
   if (supported) {
     badge.textContent = 'Web Serial available';
     badge.className = 'badge badge-ok';
-    badge.title = 'This browser exposes the Web Serial API, which can open '
-      + 'Bluetooth RFCOMM/SPP devices (Chrome/Edge 117+, desktop; also '
-      + 'available in some other Chromium-based browsers).';
+    const isFirefox = /firefox/i.test(navigator.userAgent);
+    badge.title = 'This browser exposes the Web Serial API with a working '
+      + 'requestPort(). Chrome/Edge (desktop, 117+) fully support Bluetooth '
+      + 'RFCOMM/SPP printing.'
+      + (isFirefox ? ' Firefox 155+ implements Web Serial; if the printer '
+        + 'does not appear in the chooser or the transfer fails, use '
+        + 'Chrome or Edge.' : '');
     banner.classList.add('hidden');
   } else {
     badge.textContent = 'Web Serial unavailable';
