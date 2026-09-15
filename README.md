@@ -303,15 +303,12 @@ pip install -r requirements.txt
 
 ## Web application (browser port)
 
-A complete browser port of the program lives in the [`web/`](web/) folder.
-It re-implements the label algorithms and the GUI 1:1 in HTML/CSS/JavaScript
-and prints to the PT-P300BT directly from the browser over Bluetooth using
+A complete browser version of the program lives in the [`web/`](web/) folder.
+It prints to the PT-P300BT directly from the browser over Bluetooth using
 the **Web Serial API** (Bluetooth Classic RFCOMM/SPP) — no OS serial port or
 Python installation required.
 
-**Try it online:** the app is published on GitHub Pages at
-<https://ircama.github.io/PT-P300BT/> (deployed automatically by the
-`Deploy to GitHub Pages` workflow on every push to `main`).
+**Try it online:** <https://ircama.github.io/PT-P300BT/>
 
 ### Running it
 
@@ -326,34 +323,9 @@ python -m http.server 8000
 
 ### Browser support
 
-| Browser | Preview & algorithms | Bluetooth printing |
-| --- | --- | --- |
-| Chrome / Edge (desktop, 117+) | ✅ | ✅ (Web Serial + RFCOMM/SPP) |
-| Chrome on Android | ✅ | ✅ |
-| Firefox | ✅ | ❌ (no Web Serial) |
-| Safari (macOS/iOS) | ✅ | ❌ (no Web Serial) |
-
 When the browser does not expose the Web Serial API, the page shows an
 informative banner explaining that printing is unavailable and which
 browsers to use; the preview and every label algorithm keep working.
-
-### Feature parity
-
-The web port mirrors `printlabel.py`:
-
-- **Algorithms** (`web/label.js`): auto-fit font sizing, multiline layout,
-  uniform font sizing, emoji raster overlay (in-line and print-area band),
-  luminance-based black & white emoji, image merge/crop/resize, fixed width,
-  text stretching, rulers, and the rotate/invert/mirror/threshold/128-px-pad
-  rasterization.
-- **OpenType features** (`--ligatures`): applied through SVG
-  `font-feature-settings`, which Chrome/Edge shape with HarfBuzz — the same
-  engine `uharfbuzz` wraps in the Python version.
-- **Protocol** (`web/printer.js`): the PTCBP command set, PackBits RLE
-  compression, status-register parsing and the full print job flow.
-- **GUI** (`web/index.html`, `web/app.js`): every control of the Tkinter GUI
-  (text, font, ligatures, TAB width, advanced tuning, images/merge, printer
-  options, preview zoom/pan, converted-raster view, save PNG, print).
 
 ### Tests
 
