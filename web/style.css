@@ -183,6 +183,10 @@ select { cursor: pointer; }
 .preview-actions { border-bottom: none; border-top: 1px solid var(--border); }
 .spacer { flex: 1; }
 
+/* ---------- Output log actions ---------- */
+.log-actions { display: flex; gap: 6px; padding: 6px 10px 0; }
+.log-actions .btn { padding: 4px 10px; font-size: 12px; }
+
 .status-pill {
   font-size: 12px;
   color: var(--muted);
@@ -205,10 +209,19 @@ select { cursor: pointer; }
     repeating-conic-gradient(#1a1e26 0% 25%, #14171d 0% 50%) 50% / 24px 24px;
   display: flex;
   align-items: flex-start;
-  justify-content: center;
+  /* Safe centering: when the canvas is wider than the wrap, the overflow
+     stays scrollable to BOTH edges instead of clipping the left side
+     (justify-content: center makes the left part unreachable). */
+  justify-content: safe center;
   padding: 16px;
 }
-#preview-canvas { image-rendering: pixelated; box-shadow: 0 4px 18px rgba(0,0,0,.5); background: #fff; }
+#preview-canvas {
+  image-rendering: pixelated;
+  box-shadow: 0 4px 18px rgba(0,0,0,.5);
+  background: #fff;
+  cursor: grab;
+}
+#preview-canvas.dragging { cursor: grabbing; }
 .preview-empty {
   position: absolute;
   inset: 0;

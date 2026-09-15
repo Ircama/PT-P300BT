@@ -56,7 +56,7 @@ async function setText(t) {
 console.log('page load');
 ok(await page.title() !== '', 'page has a title');
 eq(await page.isVisible('#support-badge'), true, 'support badge visible');
-eq(await page.textContent('#support-badge'), 'Web Serial available', 'Web Serial detected in Chrome');
+eq(await page.textContent('#support-badge'), 'Web Serial available (Chrome/Edge)', 'Web Serial detected in Chrome');
 eq(await page.isHidden('#support-banner'), true, 'support banner hidden when supported');
 eq(await page.$('#preview-canvas') !== null, true, 'preview canvas present');
 

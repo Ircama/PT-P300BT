@@ -213,12 +213,13 @@ console.log('rasterizeLabel (binary)');
 console.log('buildLabel (ligatures)');
 {
   // node-canvas has no SVG font-feature-settings, so the ligature render
-  // path falls back to the plain draw. The label must still build and keep
-  // the same dimensions as without the feature (no crash, no size change).
+  // path falls back to the plain draw. The label must still build, and the
+  // width must never be NARROWER than the plain one (the shaped-advance
+  // widening that prevents right-side truncation can only grow it).
   const off = await L.buildLabel(baseArgs({ text_to_print: ['fi'] }));
   const on = await L.buildLabel(baseArgs({ text_to_print: ['fi'], ligatures: 'dlig' }));
   eq(on.height, 88, 'ligature label height is 88');
-  eq(on.width, off.width, 'ligature width matches plain (fallback)');
+  ok(on.width >= off.width, `ligature width >= plain (${on.width} >= ${off.width})`);
 }
 
 // --- expandTabs ------------------------------------------------------------

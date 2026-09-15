@@ -55,6 +55,7 @@
         <label class="field">
           <span>Ligature feature (--ligatures)</span>
           <select id="ligatures"><option value="">(off)</option></select>
+          <span id="ligature-status" class="hint"></span>
         </label>
 
         <label class="field inline">
@@ -82,7 +83,7 @@
         <label class="field inline"><span>Stroke width</span><input type="number" id="stroke_width" value="0" step="1"></label>
         <label class="field inline"><span>End margin (dots)</span><input type="number" id="end_margin" value="0" step="1"></label>
         <label class="check"><input type="checkbox" id="unicode"> Use Unicode escapes (-u)</label>
-        <label class="check"><input type="checkbox" id="lines"> Show rulers/lines (-l)</label>
+        <label class="check"><input type="checkbox" id="lines" checked> Show rulers/lines (-l)</label>
       </div>
     </details>
 
@@ -151,6 +152,9 @@
     </div>
 
     <div class="preview-actions">
+      <button id="connect-btn" class="btn btn-primary" type="button">Connect printer</button>
+      <span id="port-status" class="hint">Not connected</span>
+      <span class="spacer"></span>
       <button id="refresh-btn" class="btn btn-ghost" type="button">Refresh preview (F5)</button>
       <button id="save-png" class="btn btn-ghost" type="button">Save PNG…</button>
       <span class="spacer"></span>
@@ -159,6 +163,10 @@
 
     <details class="group log-group" open>
       <summary>Output</summary>
+      <div class="log-actions">
+        <button id="log-copy" class="btn btn-ghost" type="button" title="Copy the output to the clipboard">Copy</button>
+        <button id="log-clear" class="btn btn-ghost" type="button" title="Clear the output">Clear</button>
+      </div>
       <pre id="log" class="log"></pre>
     </details>
   </section>

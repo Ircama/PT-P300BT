@@ -82,20 +82,58 @@ function _svgMeasureRoot() {
   return _svgRoot;
 }
 
-// Synchronous shaped advance width (Pillow getlength with the feature on).
-function svgMeasure(text, family, size, feature) {
-  if (!feature || !text || !_svgAvailable()) return null;
+// CSS-safe font family for SVG attributes (quote names with spaces).
+function _svgFamily(family) {
+  return /\s/.test(family) ? `'${family.replace(/'/g, '')}'` : family;
+}
+
+// Raw measurement with an optional feature (feature=null => default shaping).
+function svgMeasureRaw(text, family, size, feature) {
+  if (!text || !_svgAvailable()) return null;
   const root = _svgMeasureRoot();
   const t = document.createElementNS(_SVG_NS, 'text');
-  t.setAttribute('font-family', family);
+  t.setAttribute('font-family', _svgFamily(family));
   t.setAttribute('font-size', String(size));
-  t.style.fontFeatureSettings = `'${feature}' 1`;
+  if (feature) t.style.fontFeatureSettings = `'${feature}' 1`;
   t.textContent = text;
   root.appendChild(t);
   let len = 0;
   try { len = t.getComputedTextLength(); } catch (e) { len = 0; }
   root.removeChild(t);
   return len;
+}
+
+// Synchronous shaped advance width (Pillow getlength with the feature on).
+function svgMeasure(text, family, size, feature) {
+  if (!feature) return null;
+  return svgMeasureRaw(text, family, size, feature);
+}
+
+// Common GSUB feature tags probed to build the dynamic --ligatures list.
+const LIGATURE_PROBE_TAGS = [
+  'liga', 'dlig', 'clig', 'calt', 'rlig', 'kern', 'ccmp', 'unic', 'hist',
+  'smcp', 'c2sc', 'pcap', 'c2pc', 'onum', 'pnum', 'tnum', 'lnum', 'frac',
+  'afrc', 'ordn', 'sinf', 'sups', 'numr', 'dnom', 'zero', 'case', 'salt',
+  'ss01', 'ss02', 'ss03', 'ss04', 'ss05', 'ss06', 'ss07', 'ss08', 'ss09',
+  'ss10', 'ss11', 'ss12', 'ss13', 'ss14', 'ss15', 'ss16', 'ss17', 'ss18',
+  'ss19', 'ss20', 'cv01', 'cv02', 'cv03', 'cv04', 'cv05', 'cv06', 'cv07',
+  'cv08', 'cv09', 'cv10', 'swsh', 'cswh', 'titl', 'nalt', 'jalt',
+];
+
+// Dynamic --ligatures list (port of ptgui._refresh_ligature_combo): a tag is
+// offered when enabling it actually changes the shaped rendering of a probe
+// sample, i.e. the selected font exposes and applies it.
+function probeLigatureFeatures(family, size = 40) {
+  if (!_svgAvailable()) return [];
+  const sample = 'AVTaw fi ffi fl 0123 --> <= abcdefghij ABCXYZ';
+  const base = svgMeasureRaw(sample, family, size, null);
+  if (base == null) return [];
+  const out = [];
+  for (const tag of LIGATURE_PROBE_TAGS) {
+    const w = svgMeasureRaw(sample, family, size, tag);
+    if (w != null && Math.abs(w - base) > 0.01) out.push(tag);
+  }
+  return out;
 }
 
 function _escapeXml(s) {
@@ -124,7 +162,7 @@ function svgRender(text, family, size, feature, fill, strokeWidth, strokeFill) {
       ? ` stroke="${strokeFill}" stroke-width="${strokeWidth * 2}" stroke-linejoin="round"`
       : '';
     const svg = `<svg xmlns="${_SVG_NS}" width="${w}" height="${h}">` +
-      `<text x="${pad}" y="${baseline}" font-family="${family}" font-size="${size}" ` +
+      `<text x="${pad}" y="${baseline}" font-family="${_svgFamily(family)}" font-size="${size}" ` +
       `fill="${fill}"${stroke} style="font-feature-settings:'${feature}' 1">` +
       `${_escapeXml(text)}</text></svg>`;
     const img = new Image();
@@ -156,6 +194,24 @@ async function preRenderLigatures(font, text, feature, fill, strokeWidth, stroke
         fill, strokeWidth, strokeFill);
     }
   }
+}
+
+// Advance width using the shaped (ligature-aware) advances; falls back to
+// the plain font measurement when shaping is unavailable. Mirrors the way
+// _draw_text_mixed advances the pen when --ligatures is active.
+function shapedWidth(font, text) {
+  let total = 0;
+  for (const [f, chunk] of font._split(text)) {
+    if (f === null) {
+      for (const ch of chunk) total += font._emojiWidth(ch);
+    } else if (font._ligatures && !chunk.includes('\n')) {
+      const w = svgMeasure(chunk, font.font.family, font.font.size, font._ligatures);
+      total += w != null ? w : f.getlength(chunk);
+    } else {
+      total += f.getlength(chunk);
+    }
+  }
+  return total;
 }
 
 // ---------------------------------------------------------------------------
@@ -710,7 +766,14 @@ async function buildLabel(args) {
       if (font._emojiBand) {
         emojiStripW = Math.max(0, ...textLines.map((l) => font.bandWidth(l)));
       }
-      const imgW = emojiStripW + fontWidth + args.h_padding * 2 + 1 + args.end_margin;
+      // With --ligatures the shaped advances can exceed the unshaped
+      // measurement: widen the image so nothing is truncated on the right.
+      let textW = fontWidth;
+      if (args.ligatures) {
+        textW = Math.max(fontWidth,
+          ...textLines.map((l) => shapedWidth(font, l)));
+      }
+      const imgW = emojiStripW + textW + args.h_padding * 2 + 1 + args.end_margin;
       image = newCanvas(imgW, HEIGHT_OF_THE_IMAGE, '#fff');
       ctx = image.getContext('2d');
       if (emojiStripW) {
@@ -779,7 +842,9 @@ async function buildLabel(args) {
       }
       let emojiStripW = 0;
       if (font._emojiBand) emojiStripW = font.bandWidth(text);
-      const imgW = emojiStripW + fontWidth + args.h_padding * 2 + 1 + args.end_margin;
+      let textW = fontWidth;
+      if (args.ligatures) textW = Math.max(fontWidth, shapedWidth(font, text));
+      const imgW = emojiStripW + textW + args.h_padding * 2 + 1 + args.end_margin;
       image = newCanvas(imgW, HEIGHT_OF_THE_IMAGE, '#fff');
       ctx = image.getContext('2d');
       if (emojiStripW) {
@@ -1002,6 +1067,7 @@ window.PTLabel = {
   WebFont,
   expandTabs,
   decodeUnicodeEscapes,
+  probeLigatureFeatures,
   MM_PER_DOT,
   HEIGHT_OF_THE_IMAGE,
   HEIGHT_OF_THE_TAPE,

@@ -33,8 +33,11 @@ function checkSupport() {
   const bannerText = $('support-banner-text');
   const supported = window.PTPrinter.SerialTransport.isSupported();
   if (supported) {
-    badge.textContent = 'Web Serial available';
+    badge.textContent = 'Web Serial available (Chrome/Edge)';
     badge.className = 'badge badge-ok';
+    badge.title = 'This browser exposes the Web Serial API, which can open '
+      + 'Bluetooth RFCOMM/SPP devices (Chrome/Edge 117+, desktop). Firefox '
+      + 'and Safari do not support it.';
     banner.classList.add('hidden');
   } else {
     badge.textContent = 'Web Serial unavailable';
@@ -368,17 +371,57 @@ function savePng() {
 }
 
 // ---------------------------------------------------------------------------
-// Ligature features (best-effort: list common GSUB tags)
+// Ligature features — dynamic list from the selected font (port of
+// ptgui._refresh_ligature_combo). A tag is offered when enabling it changes
+// the shaped rendering of a probe sample, i.e. the font exposes and applies it.
 // ---------------------------------------------------------------------------
 function populateLigatures() {
   const sel = $('ligatures');
-  const tags = ['', 'calt', 'liga', 'dlig', 'clig', 'rlig', 'kern', 'ss01', 'ss02'];
+  const current = sel.value || '';
   sel.innerHTML = '';
-  for (const t of tags) {
+  const off = document.createElement('option');
+  off.value = '';
+  off.textContent = '(off)';
+  sel.appendChild(off);
+  const feats = window.PTLabel.probeLigatureFeatures(state.fontFamily);
+  for (const t of feats) {
     const o = document.createElement('option');
     o.value = t;
-    o.textContent = t || '(off)';
+    o.textContent = t;
     sel.appendChild(o);
+  }
+  if (feats.length) {
+    $('ligature-status').textContent = `${feats.length} feature(s) available for ${state.fontFamily}`;
+  } else {
+    $('ligature-status').textContent = `no GSUB features detected for ${state.fontFamily}`;
+  }
+  // Keep the selection when the font is re-picked (features are font-specific).
+  if ([...sel.options].some((o) => o.value === current)) sel.value = current;
+}
+
+// ---------------------------------------------------------------------------
+// Output log: Copy / Clear
+// ---------------------------------------------------------------------------
+async function copyLog() {
+  const text = $('log').textContent;
+  try {
+    await navigator.clipboard.writeText(text);
+    setStatus('Output copied to the clipboard.');
+  } catch (e) {
+    // Clipboard API needs a secure context: fall back to a hidden textarea.
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+      document.execCommand('copy');
+      setStatus('Output copied to the clipboard.');
+    } catch (e2) {
+      setStatus('Copy failed: select the text manually.');
+    }
+    document.body.removeChild(ta);
   }
 }
 
@@ -393,10 +436,18 @@ function wire() {
   });
   $('fontname').addEventListener('change', (e) => {
     state.fontFamily = e.target.value;
+    populateLigatures();
     schedulePreview();
   });
   $('font-upload-btn').onclick = () => $('font-upload').click();
-  $('font-upload').onchange = (e) => { if (e.target.files[0]) loadFontFile(e.target.files[0]); };
+  $('font-upload').onchange = (e) => {
+    if (e.target.files[0]) {
+      loadFontFile(e.target.files[0]).then(() => populateLigatures());
+    }
+  };
+
+  $('log-copy').onclick = copyLog;
+  $('log-clear').onclick = () => { $('log').textContent = ''; };
 
   $('merge-add').onclick = () => $('merge-file').click();
   $('merge-file').onchange = (e) => { if (e.target.files[0]) addMergeFile(e.target.files[0]); };
@@ -411,6 +462,26 @@ function wire() {
   $('zoom-out').onclick = () => setZoom('out');
   $('zoom-fit').onclick = () => setZoom('fit');
   $('zoom-tape').onclick = () => setZoom('tape');
+
+  // Drag-to-pan on the preview canvas (mouse + touch).
+  const wrap = $('canvas-wrap');
+  let pan = null;
+  const cv = $('preview-canvas');
+  cv.addEventListener('pointerdown', (e) => {
+    if (!state.pilImage) return;
+    pan = { x: e.clientX, y: e.clientY, sl: wrap.scrollLeft, st: wrap.scrollTop };
+    cv.classList.add('dragging');
+    cv.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  cv.addEventListener('pointermove', (e) => {
+    if (!pan) return;
+    wrap.scrollLeft = pan.sl - (e.clientX - pan.x);
+    wrap.scrollTop = pan.st - (e.clientY - pan.y);
+  });
+  const endPan = () => { pan = null; cv.classList.remove('dragging'); };
+  cv.addEventListener('pointerup', endPan);
+  cv.addEventListener('pointercancel', endPan);
 
   window.addEventListener('resize', () => { if (state.zoom === null) renderPreview(); });
   document.addEventListener('keydown', (e) => {
