@@ -309,6 +309,10 @@ and prints to the PT-P300BT directly from the browser over Bluetooth using
 the **Web Serial API** (Bluetooth Classic RFCOMM/SPP) — no OS serial port or
 Python installation required.
 
+**Try it online:** the app is published on GitHub Pages at
+<https://ircama.github.io/PT-P300BT/> (deployed automatically by the
+`Deploy to GitHub Pages` workflow on every push to `main`).
+
 ### Running it
 
 Serve the folder over HTTP (Web Serial requires a secure context; `file://`
@@ -505,6 +509,7 @@ Comparing this repository with the PT-P300BT Gist, the Python *printlabel.py* pr
 - https://github.com/piksel/pytouch-cube
 - https://github.com/probonopd/ptouch-770
 - https://github.com/kacpi2442/labelmaker
+- https://btlabel.org/ (Mac native app available for free download)
 
 ## Acknowledgments
 
