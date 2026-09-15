@@ -398,6 +398,39 @@ class SerialTransport {
   async open(baudRate = 9600) {
     await this.port.open({ baudRate });
     this.writer = this.port.writable.getWriter();
+    // pyserial asserts DTR/RTS when opening a port; Web Serial does not.
+    // Many Bluetooth SPP devices (the PT-P300BT included) stay silent
+    // until the host asserts the modem lines, which is exactly the
+    // "connected but no status bytes" symptom.
+    try { await this.port.setSignals({ dataTerminalReady: true, requestToSend: true }); } catch (e) { /* optional */ }
+    this._startReadPump();
+  }
+
+  // Continuous read pump: a single pending reader.read() at any time,
+  // pushing every chunk into _readBuffer as soon as it arrives. The old
+  // per-call Promise.race approach left an orphaned read() promise alive
+  // after each timeout; when the response finally arrived it was consumed
+  // by that dead promise and the next read() saw 0 bytes forever.
+  _startReadPump() {
+    if (this._pumping) return;
+    this._pumping = true;
+    const pump = async () => {
+      try {
+        if (!this.reader) this.reader = this.port.readable.getReader();
+        while (this._pumping) {
+          const { value, done } = await this.reader.read();
+          if (done) break;
+          if (value && value.length) {
+            this._readBuffer = concatBytes([this._readBuffer, value]);
+          }
+        }
+      } catch (e) {
+        /* port closed or reader released */
+      } finally {
+        this._pumping = false;
+      }
+    };
+    pump();
   }
 
   async write(bytes) {
@@ -405,21 +438,11 @@ class SerialTransport {
     await this.writer.write(bytes);
   }
 
-  async read(n, timeoutMs = 1000) {
-    // Read exactly n bytes (or fewer on timeout), buffering leftovers.
+  async read(n, timeoutMs = 10000) {
+    // Read exactly n bytes (or fewer on timeout) from the pump buffer.
     const deadline = Date.now() + timeoutMs;
     while (this._readBuffer.length < n && Date.now() < deadline) {
-      if (!this.reader) this.reader = this.port.readable.getReader();
-      const remaining = deadline - Date.now();
-      const result = await Promise.race([
-        this.reader.read(),
-        new Promise((res) => setTimeout(() => res({ timeout: true }), Math.max(1, remaining))),
-      ]);
-      if (result.timeout) break;
-      if (result.done) break;
-      if (result.value && result.value.length) {
-        this._readBuffer = concatBytes([this._readBuffer, result.value]);
-      }
+      await new Promise((res) => setTimeout(res, 5));
     }
     const take = Math.min(n, this._readBuffer.length);
     const out = this._readBuffer.subarray(0, take);
@@ -428,22 +451,11 @@ class SerialTransport {
   }
 
   async resetInputBuffer() {
-    // Drain whatever is pending without blocking.
-    try {
-      if (!this.reader) this.reader = this.port.readable.getReader();
-      const result = await Promise.race([
-        this.reader.read(),
-        new Promise((res) => setTimeout(() => res({ timeout: true }), 50)),
-      ]);
-      if (!result.timeout && !result.done && result.value) {
-        this._readBuffer = new Uint8Array(0);
-      }
-    } catch (e) {
-      /* ignore */
-    }
+    this._readBuffer = new Uint8Array(0);
   }
 
   async close() {
+    this._pumping = false;
     try { if (this.reader) { await this.reader.cancel(); this.reader.releaseLock(); this.reader = null; } } catch (e) {}
     try { if (this.writer) { this.writer.releaseLock(); this.writer = null; } } catch (e) {}
     try { await this.port.close(); } catch (e) {}

@@ -172,7 +172,7 @@ select { cursor: pointer; }
 .merge-list li.selected { border-color: var(--accent); background: rgba(79, 140, 255, .12); }
 
 /* ---------- Preview ---------- */
-.preview { display: flex; flex-direction: column; }
+.preview { display: flex; flex-direction: column; min-height: 0; }
 .preview-toolbar, .preview-actions {
   display: flex;
   align-items: center;
@@ -235,10 +235,22 @@ select { cursor: pointer; }
 .preview-empty.hidden { display: none; }
 
 /* ---------- Log ---------- */
-.log-group { margin: 6px 12px 12px; }
+.log-group {
+  margin: 6px 12px 12px;
+  /* Shrinkable flex child of .preview: without min-height:0 the details
+     element keeps its content height and the log spills past the panel
+     border when the window is short. */
+  flex: 0 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.log-group > summary { flex: 0 0 auto; }
 .log {
   margin: 0;
   padding: 10px;
+  flex: 1 1 auto;
+  min-height: 0;
   max-height: 160px;
   overflow: auto;
   background: #0b0d11;
