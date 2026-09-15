@@ -71,6 +71,10 @@ code { font-family: "Cascadia Code", Consolas, monospace; color: var(--muted); }
   gap: 14px;
   padding: 14px;
   height: calc(100vh - 62px);
+  /* On very short windows the fixed height would squeeze the preview panel
+     until the Output log was clipped by the panel border; a floor makes the
+     page scroll instead. */
+  min-height: 620px;
 }
 @media (max-width: 900px) {
   .layout { grid-template-columns: 1fr; height: auto; }
@@ -203,7 +207,10 @@ select { cursor: pointer; }
 .canvas-wrap {
   position: relative;
   flex: 1;
-  min-height: 260px;
+  /* Shrinkable so a short window compresses the CANVAS, never the Output
+     log below it (a fixed min-height here forced the log group smaller
+     than its content, spilling the <pre> past the group border). */
+  min-height: 0;
   overflow: auto;
   background:
     repeating-conic-gradient(#1a1e26 0% 25%, #14171d 0% 50%) 50% / 24px 24px;
@@ -237,11 +244,10 @@ select { cursor: pointer; }
 /* ---------- Log ---------- */
 .log-group {
   margin: 6px 12px 12px;
-  /* Shrinkable flex child of .preview: without min-height:0 the details
-     element keeps its content height and the log spills past the panel
-     border when the window is short. */
-  flex: 0 1 auto;
-  min-height: 0;
+  /* Fixed-size footer of the preview panel: its content (summary + Copy/
+     Clear + 160px-max log) always fits, so it must never be compressed by
+     the flex layout (compression made the <pre> spill past the border). */
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
 }
@@ -249,8 +255,6 @@ select { cursor: pointer; }
 .log {
   margin: 0;
   padding: 10px;
-  flex: 1 1 auto;
-  min-height: 0;
   max-height: 160px;
   overflow: auto;
   background: #0b0d11;
