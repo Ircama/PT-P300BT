@@ -48,13 +48,13 @@
           <span id="font-status" class="hint"></span>
         </div>
 
-        <label class="check"><input type="checkbox" id="center_text"> Center text (-H)</label>
-        <label class="check"><input type="checkbox" id="emoji_print_area"> Emoji fill print area (--emoji-print-area)</label>
-        <label class="check"><input type="checkbox" id="mono_emoji" checked> Emoji black &amp; white (--mono-emoji)</label>
-        <label class="check"><input type="checkbox" id="uniform_font"> Uniform font sizing (--uniform-font)</label>
+        <label class="check"><input type="checkbox" id="center_text"> Center text</label>
+        <label class="check"><input type="checkbox" id="emoji_print_area"> Emoji fill print area</label>
+        <label class="check"><input type="checkbox" id="mono_emoji" checked> Emoji black &amp; white</label>
+        <label class="check"><input type="checkbox" id="uniform_font"> Uniform font sizing</label>
 
         <label class="field">
-          <span>Ligature feature (--ligatures)</span>
+          <span>Ligature feature</span>
           <select id="ligatures"><option value="">(off)</option></select>
           <span id="ligature-status" class="hint"></span>
         </label>
@@ -83,13 +83,13 @@
         <label class="field inline"><span>Stroke fill</span><input type="text" id="stroke_fill" value=""></label>
         <label class="field inline"><span>Stroke width</span><input type="number" id="stroke_width" value="0" step="1"></label>
         <label class="field inline"><span>End margin (dots)</span><input type="number" id="end_margin" value="0" step="1"></label>
-        <label class="check"><input type="checkbox" id="unicode"> Use Unicode escapes (-u)</label>
-        <label class="check"><input type="checkbox" id="lines" checked> Show rulers/lines (-l)</label>
+        <label class="check"><input type="checkbox" id="unicode"> Use Unicode escapes</label>
+        <label class="check"><input type="checkbox" id="lines" checked> Show rulers/lines</label>
       </div>
     </details>
 
     <details class="group">
-      <summary>Images (merge -M / legacy -i)</summary>
+      <summary>Images</summary>
       <div class="group-body">
         <ul id="merge-list" class="merge-list"></ul>
         <div class="row">
@@ -98,9 +98,9 @@
           <input id="merge-file" type="file" accept="image/*" hidden>
         </div>
         <div class="grid2">
-          <label class="field inline"><span>Resize (-R)</span><input type="number" id="resize" value="1.0" step="0.1"></label>
-          <label class="field inline"><span>X merge (-X)</span><input type="number" id="x_merge" value="0" step="1"></label>
-          <label class="field inline"><span>Y merge (-Y)</span><input type="number" id="y_merge" value="12" step="1"></label>
+          <label class="field inline"><span>Resize</span><input type="number" id="resize" value="1.0" step="0.1"></label>
+          <label class="field inline"><span>X merge</span><input type="number" id="x_merge" value="0" step="1"></label>
+          <label class="field inline"><span>Y merge</span><input type="number" id="y_merge" value="12" step="1"></label>
           <label class="field inline"><span>Merge gap (dots)</span><input type="number" id="merge_gap" value="0" step="1"></label>
           <label class="field inline"><span>White level</span><input type="number" id="white_level" value="240" step="1"></label>
           <label class="field inline"><span>Threshold</span><input type="number" id="threshold" value="75" step="1"></label>
@@ -111,13 +111,13 @@
     <details class="group" open>
       <summary>Printer</summary>
       <div class="group-body">
-        <label class="check"><input type="checkbox" id="no_print"> No print (-n, no paper output)</label>
-        <label class="check"><input type="checkbox" id="auto_cut"> Auto cut (-a)</label>
+        <label class="check"><input type="checkbox" id="no_print"> No print</label>
+        <label class="check"><input type="checkbox" id="auto_cut"> Auto cut</label>
         <details class="subgroup">
           <summary>Printer tuning (advanced)</summary>
-          <label class="check"><input type="checkbox" id="no_feed"> No feed (-F, chaining)</label>
-          <label class="check"><input type="checkbox" id="raw"> Raw (-r)</label>
-          <label class="check"><input type="checkbox" id="nocomp"> No compression (-C)</label>
+          <label class="check"><input type="checkbox" id="no_feed"> No feed</label>
+          <label class="check"><input type="checkbox" id="raw"> Raw</label>
+          <label class="check"><input type="checkbox" id="nocomp"> No compression</label>
         </details>
       </div>
     </details>
