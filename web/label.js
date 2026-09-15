@@ -980,35 +980,32 @@ function drawRulers(ctx, image, printBorder) {
 // ---------------------------------------------------------------------------
 function rasterizeLabel(image, args) {
   const w = image.width, h = image.height;
-  // Rotate -90 (expand): new canvas is h x w.
-  const rot = newCanvas(h, w, '#fff');
-  const rctx = rot.getContext('2d');
-  rctx.translate(0, w);
-  rctx.rotate(-Math.PI / 2);
-  rctx.drawImage(image, 0, 0);
-  // Mirror horizontally.
-  const mir = newCanvas(h, w, '#fff');
-  const mctx = mir.getContext('2d');
-  mctx.translate(h, 0);
-  mctx.scale(-1, 1);
-  mctx.drawImage(rot, 0, 0);
-  // Invert + threshold -> binary.
-  const img = mctx.getImageData(0, 0, h, w);
-  const d = img.data;
+  // Pillow's rotate(-90, expand=True) followed by ImageOps.mirror() is
+  // exactly a TRANSPOSITION: final(col, row) = src(row, col) — the raster
+  // row is the label column and the raster column is the label row.
+  // (Verified against printlabel.rasterize_label with synthetic patterns.)
+  // Doing it as a pure pixel transpose (instead of canvas transforms)
+  // keeps the output bit-exact with the Python pipeline: PIL pads with 0
+  // and binarizes with v = (255 - g) > threshold ? 255 : 0, so the INK
+  // ends up as the bright (255) pixels and the pad/background as 0.
+  const src = image.getContext('2d').getImageData(0, 0, w, h).data;
   const threshold = args.threshold;
-  for (let i = 0; i < d.length; i += 4) {
-    const g = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-    const inv = 255 - g;
-    const v = inv > threshold ? 255 : 0;
-    d[i] = d[i + 1] = d[i + 2] = v;
-    d[i + 3] = 255;
-  }
-  mctx.putImageData(img, 0, 0);
-  // Pad width to 128 (centered).
-  const padded = newCanvas(128, w, '#fff');
+  const x0 = Math.floor((128 - h) / 2); // content starts here (h = raster width)
+  const padded = newCanvas(128, w); // no fill: PIL Image.new('1') pads with 0
   const pctx = padded.getContext('2d');
-  const x = Math.floor((128 - h) / 2);
-  pctx.drawImage(mir, x, 0);
+  const out = pctx.createImageData(128, w);
+  const d = out.data;
+  for (let ry = 0; ry < w; ry++) {        // raster row = label column
+    for (let rx = 0; rx < h; rx++) {      // raster col = label row
+      const si = (rx * w + ry) * 4;       // src(row=rx, col=ry)
+      const g = 0.299 * src[si] + 0.587 * src[si + 1] + 0.114 * src[si + 2];
+      const v = (255 - g) > threshold ? 255 : 0;
+      const di = (ry * 128 + x0 + rx) * 4;
+      d[di] = d[di + 1] = d[di + 2] = v;
+      d[di + 3] = 255;
+    }
+  }
+  pctx.putImageData(out, 0, 0);
   return padded;
 }
 

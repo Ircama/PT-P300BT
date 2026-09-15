@@ -26,7 +26,21 @@ const sandbox = {
   window: {}, console,
   Uint8Array, ArrayBuffer, DataView, Math, Date, Promise, setTimeout,
   document: {
-    createElement(tag) { return tag === 'canvas' ? createCanvas(1, 1) : {}; },
+    // Real canvas objects: rasterizeLabel rotates with a transform, so the
+    // shim canvas must behave exactly like a browser one. label.js sets
+    // width/height right after createElement, which node-canvas supports.
+    createElement(tag) {
+      if (tag !== 'canvas') return {};
+      const cv = createCanvas(1, 1);
+      const orig = cv.getContext.bind(cv);
+      cv.getContext = (type, ...rest) => {
+        const ctx = orig(type, ...rest);
+        // node-canvas requires willReadFrequently-free contexts; nothing to
+        // patch, this wrapper just keeps the API identical to the browser.
+        return ctx;
+      };
+      return cv;
+    },
   },
   Image: class { set src(v) { this._src = v; this.onerror && this.onerror(); } },
 };
@@ -86,8 +100,9 @@ function jsRaster(args) {
     const padded = L.rasterizeLabel(image, args);
     const d = padded.getContext('2d').getImageData(0, 0, padded.width, padded.height).data;
     const out = new Uint8Array(padded.width * padded.height);
-    // In the JS raster the text is white (255) and the background black (0);
-    // in the Python '1'-mode raster the text is 1. Map text -> 1.
+    // rasterizeLabel() mirrors printlabel.rasterize_label: after the
+    // invert+threshold the INK is the bright (255) pixel, and PIL packs a
+    // 255 pixel of '1'-mode as bit 1. So bit 1 = bright pixel here too.
     for (let i = 0; i < out.length; i++) out[i] = d[i * 4] >= 128 ? 1 : 0;
     return { width: padded.width, height: padded.height, bytes: out };
   });

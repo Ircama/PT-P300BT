@@ -365,9 +365,14 @@ function imageDataToBytes(canvas) {
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const i = (y * w + x) * 4;
-      // Black pixel -> 1 bit (the raster is inverted: ink = 1).
-      const black = img[i] < 128 ? 1 : 0;
-      if (black) out[y * bytesPerLine + (x >> 3)] |= (0x80 >> (x & 7));
+      // rasterizeLabel() outputs the INK as bright pixels (255): it applies
+      // invert+threshold, so text -> 255 and background -> 0, exactly like
+      // the Python '1'-mode raster where a 255 pixel packs to bit 1.
+      // Setting the bit for the BRIGHT pixel keeps the byte stream identical
+      // to printlabel.rasterize_label().tobytes() (mapping the dark pixel
+      // instead inverted the print: white text on a black label).
+      const ink = img[i] >= 128 ? 1 : 0;
+      if (ink) out[y * bytesPerLine + (x >> 3)] |= (0x80 >> (x & 7));
     }
   }
   return out;
