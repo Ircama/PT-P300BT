@@ -1,68 +1,90 @@
 # Printing to a Brother P-Touch Cube PT-P300BT label printer from a computer
 
-A Python-based label printing utility designed for Brother PT-P300BT thermal label printers. This program creates custom labels with text, images, and advanced formatting options, automatically optimizing content to fit within the printer's specifications.
+A Web-based and Python-based label printing utility designed for Brother PT-P300BT thermal label printers. This program creates custom labels with text, images, and advanced formatting options, automatically optimizing content to fit within the printer's specifications.
 
-It supports any TrueType and OpenType font, automatically selects the maximum font size to fit the printable area of the tape. Text strings including characters which do not [overshoot](https://en.wikipedia.org/wiki/Overshoot_(typography)) below the [baseline](https://en.wikipedia.org/wiki/Baseline_(typography)) (e.g., uppercase letters) are automatically printed with a bigger font. In addition, the program calculates the size of the printed tape and the print duration and processes images.
+It supports any TrueType and OpenType font, automatically selects the maximum font size to fit the printable area of the tape. Text strings including characters which do not [overshoot](https://en.wikipedia.org/wiki/Overshoot_(typography)) below the [baseline](https://en.wikipedia.org/wiki/Baseline_(typography)) (e.g., uppercase letters) are automatically printed with a bigger font. In addition, the program calculates the length of the printed tape and the printing time, and supports emojis and images.
 
 ## Introduction
 
 The [Brother P-touch Cube PT-P300BT labelling machine](https://support.brother.com/g/b/producttop.aspx?c=gb&lang=en&prod=p300bteuk) is intended to be controlled from the official Brother P-touch Design&Print 2 app for [Android](https://play.google.com/store/apps/details?id=com.brother.ptouch.designandprint2) and [iOS](https://apps.apple.com/it/app/brother-p-touch-design-print/id1105307806) devices.
 
-This repository provides a pure-Python tool to print from a computer: a
-command-line interface for scripted / batch printing and a full Tkinter
-graphical interface (`--gui`) with a live 1:1 preview, a system font
-browser and color emoji rendering in the text box.
+This repository provides pure-Web and pure-Python tools for printing from computers and mobile devices: a command-line interface for scripted and batch printing, and a full Tkinter graphical interface (`--gui`) with a live preview, a system font browser, and color emoji rendering in the text box. The same user experience is also available through a Web GUI, accessible from supported desktop and mobile browsers.
 
 ## Features
 
 ### Text Rendering
-- **Unicode Support**: Full UTF-8 character support with optional Unicode escape sequences
-- **Custom Fonts**: Support for TrueType (.ttf) and OpenType (.otf) fonts
-- **Automatic Font Sizing**: Intelligent font size optimization to fit the printable area
-- **Multiline Text**: Support for multi-line labels with configurable line spacing
-- **Text Styling**: Configurable fill colors, stroke effects, and text centering
-- **Font Scaling**: Manual font size scaling with percentage-based adjustments
-- **Emoji Support**: Emoji are rendered as raster overlays (in-line sized to their row, or filling the printable area with `--emoji-print-area`), shown in black & white by default (what actually prints) or in color with `--no-mono-emoji`
-- **Uniform Font Sizing** (`--uniform-font`): measure a fixed sample ("Ag") so all labels with the same number of lines use the same font size
-- **OpenType Features** (`--ligatures FEATURE`): apply a GSUB feature of the selected font (e.g. `calt` for the arrows in Fira Code, `liga`/`dlig`) via optional uharfbuzz shaping; `--list-ligatures` shows which features the font exposes
-- **TAB Expansion** (`--tab-width`): expand TAB characters to a configurable number of spaces so they never print as a square box
+
+* **Unicode Support**: Full UTF-8 character support with optional Unicode escape sequences
+* **Custom Fonts**: Support for TrueType (.ttf) and OpenType (.otf) fonts
+* **Automatic Font Sizing**: Intelligent font size optimization to fit the printable area
+* **Multiline Text**: Support for multi-line labels with configurable line spacing
+* **Text Styling**: Configurable fill colors, stroke effects, and text centering
+* **Font Scaling**: Manual font size scaling with percentage-based adjustments
+* **Emoji Support**: Emoji are rendered as raster overlays (in-line sized to their row, or filling the printable area with `--emoji-print-area`), shown in black & white by default (what actually prints) or in color with `--no-mono-emoji`
+* **Uniform Font Sizing** (`--uniform-font`): measure a fixed sample ("Ag") so all labels with the same number of lines use the same font size
+* **OpenType Features** (`--ligatures FEATURE`): apply a GSUB feature of the selected font (e.g. `calt` for the arrows in Fira Code, `liga`/`dlig`) via optional uharfbuzz shaping; `--list-ligatures` shows which features the font exposes
+* **TAB Expansion** (`--tab-width`): expand TAB characters to a configurable number of spaces so they never print as a square box
 
 ### Image Processing
-- **Image Integration**: Merge images with text labels
-- **PDF Support**: Convert PDF files to images for printing
-- **Smart Cropping**: Automatic cropping of white space around image content
-- **Aspect Ratio Preservation**: Maintains image proportions while resizing
-- **Multiple Image Merge**: Combine multiple images in a single label
+
+* **Image Integration**: Merge images with text labels
+* **PDF Support**: Convert PDF files to images for printing
+* **Smart Cropping**: Automatic cropping of white space around image content
+* **Aspect Ratio Preservation**: Maintains image proportions while resizing
+* **Multiple Image Merge**: Combine multiple images in a single label
 
 ### Label Customization
-- **Flexible Sizing**: Custom horizontal text stretching to specified millimeter widths
-- **Padding Control**: Adjustable horizontal padding and vertical positioning
-- **End Margins**: Configurable end margins for label finishing
-- **Auto-cutting**: Optional automatic cutting or label boundary marking
-- **Chain Printing**: Disable feeding for continuous label chains
-- **Configurable Tape Width** (`--tape-width`): plan the label for a smaller printable band (e.g. 6/9 mm) while keeping the 128 px raster compatible with the device (the hardware itself prints on 12 mm tape)
 
-### Graphical Interface (--gui)
-- **Tkinter GUI**: launch a full graphical front-end with `python printlabel.py --gui`
-  - live preview of the label, matching the printed tape 1:1
-  - color emoji rendering in the Text & Font input box
-  - system font browser with per-font sample preview
-  - all options exposed as controls (text, images, merge list, expert settings)
-  - print confirmation dialog and error reporting
-  - console progress messages are suppressed while the GUI is running
+* **Flexible Sizing**: Custom horizontal text stretching to specified millimeter widths
+* **Padding Control**: Adjustable horizontal padding and vertical positioning
+* **End Margins**: Configurable end margins for label finishing
+* **Auto-cutting**: Optional automatic cutting or label boundary marking
+* **Chain Printing**: Disable feeding for continuous label chains
+* **Configurable Tape Width** (`--tape-width`): plan the label for a smaller printable band (e.g. 6/9 mm) while keeping the 128 px raster compatible with the device (the hardware itself prints on 12 mm tape)
+
+### Graphical Interface (`--gui`)
+
+* **Tkinter GUI**: launch a full graphical front-end with `python printlabel.py --gui`
+
+  * live preview of the label, matching the printed tape 1:1
+  * color emoji rendering in the Text & Font input box
+  * system font browser with per-font sample preview
+  * all options exposed as controls (text, images, merge list, expert settings)
+  * print confirmation dialog and error reporting
+  * console progress messages are suppressed while the GUI is running
+
+### Web GUI
+
+* **Browser-based Interface**: Full-featured web interface available at https://ircama.github.io/PT-P300BT/
+* **Live Preview**: Preview the label directly in the browser before printing
+* **Font Browser**: Browse and preview available system fonts
+* **Color Emoji Rendering**: Render color emoji directly in the text input
+* **Image Support**: Add and combine images with text labels
+* **OpenType Features**: Select supported OpenType/GSUB features such as `liga`, `dlig`, and `calt`
+* **Bluetooth Printing**: Print directly to the P300BT over Bluetooth Classic RFCOMM where supported by the browser
+* **Cross-Platform**: Designed to run on supported desktop and mobile browsers without requiring a dedicated native application
+* **Print Controls**: Configure tape size, margins, spacing, cutting, chaining, and other printing options directly from the browser
 
 ### Advanced Features
-- **Line Spacing Optimization**: Automatic line spacing adjustment when text doesn't fit
-- **Visual Guides**: Optional ruler lines and printable area indicators
-- **Binary Conversion**: Optimized image processing with custom thresholding
-- **Compression Control**: Optional compression disable for specific printing needs
-- **Preview Mode**: View generated images before printing
+
+* **Line Spacing Optimization**: Automatic line spacing adjustment when text doesn't fit
+* **Visual Guides**: Optional ruler lines and printable area indicators
+* **Binary Conversion**: Optimized image processing with custom thresholding
+* **Compression Control**: Optional compression disable for specific printing needs
+* **Preview Mode**: View generated images before printing
 
 ## Usage
 
-The program has two front-ends: a **command line** for scripted / batch
-printing, and a **Tkinter GUI** (`--gui`) for interactive use with a live
-1:1 preview, a system font browser and color emoji in the text box.
+The project provides three front-ends: a **command line** for scripted / batch printing, a **Tkinter GUI** (`--gui`) for interactive use with a live preview, a system font browser and color emoji in the text box, and a **Web GUI** for browser-based printing, including direct Bluetooth printing on supported browsers and platforms.
+
+### Web application
+
+A complete browser version of the program lives in the [`web/`](web/) folder.
+It prints to the PT-P300BT directly from the browser over Bluetooth using
+the **Web Serial API** (Bluetooth Classic RFCOMM/SPP) — no OS serial port or
+Python installation required.
+
+**Try it online:** <https://ircama.github.io/PT-P300BT/>
 
 ### CLI
 
@@ -301,19 +323,9 @@ git clone https://github.com/Ircama/PT-P300BT && cd PT-P300BT
 pip install -r requirements.txt
 ```
 
-## Web application (browser port)
+## Running the Web GUI
 
-A complete browser version of the program lives in the [`web/`](web/) folder.
-It prints to the PT-P300BT directly from the browser over Bluetooth using
-the **Web Serial API** (Bluetooth Classic RFCOMM/SPP) — no OS serial port or
-Python installation required.
-
-**Try it online:** <https://ircama.github.io/PT-P300BT/>
-
-### Running it
-
-Serve the folder over HTTP (Web Serial requires a secure context; `file://`
-works for the preview but not for the serial port):
+Serve the folder over HTTP (Web Serial requires a secure context; `file://` works for the preview but not for the serial port):
 
 ```bash
 cd web
@@ -321,13 +333,11 @@ python -m http.server 8000
 # then open http://localhost:8000/ in Chrome or Edge
 ```
 
-### Browser support
-
 When the browser does not expose the Web Serial API, the page shows an
 informative banner explaining that printing is unavailable and which
 browsers to use; the preview and every label algorithm keep working.
 
-### Tests
+### Tests for the JS component
 
 ```bash
 node web/test_printer.mjs   # protocol + print flow (40 tests)
