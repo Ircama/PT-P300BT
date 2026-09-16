@@ -486,6 +486,10 @@ The scripts convert text labels to appropriate images (including the first page 
 
 Comparing this repository with the PT-P300BT Gist, the Python *printlabel.py* program has been introduced, replacing *printlabel.cmd* and *printlabel.sh* with several enhancements; it avoids creating temporary image files, provides more accurate image processing and does not rely on ImageMagick. In addition, all options included in the original *labelmaker.py* module are available, with several extensions.
 
+## Code Development Mode
+
+Up to [version 3](https://github.com/Ircama/PT-P300BT/tree/1cb4c7ad138caa821b44a74f3d8a18ec4d6f4ee5), the code was written entirely by humans. Starting with version 4, development has been AI-assisted: the Python CLI remains essentially human-written, while the Python and Web GUIs are AI-assisted 1:1 ports of the same functionality and user experience. Current AI agents: DeepSeek-V4.1-Flash and GLM-5.3-Flash.
+
 ## Other resources
 
 - https://github.com/piksel/pytouch-cube
